@@ -1,0 +1,360 @@
+# Speech-to-Text Application
+
+Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk support.
+
+## Features
+
+- **Hold-to-talk recording** - Hold a configurable hotkey (default Right Ctrl) to record, release to transcribe
+- **Offline transcription** - Uses Whisper model locally (no internet required)
+- **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
+- **Cross-display server** - Works on both X11 (xdotool) and Wayland (ydotool)
+- **Auto-typing** - Automatically types transcribed text into active window
+- **Background service** - Runs as systemd user service
+- **Audio feedback** - Optional sounds for recording start/stop
+- **CPU optimized** - Runs on CPU with int8 optimization
+
+## Quick Start
+
+### Interactive Mode
+
+```bash
+./run.sh
+```
+
+Shows a menu with options:
+1. Record and transcribe (5 seconds)
+2. Record and transcribe (custom duration)
+3. Record, transcribe, and TYPE to active window
+4. Run component tests
+5. Start daemon mode (hold-to-talk)
+
+### Daemon Mode (Hold-to-Talk)
+
+```bash
+# Run in foreground
+./run.sh --daemon
+
+# Or start as background service
+systemctl --user start speech-to-text
+```
+
+Hold the configured hotkey (default **Right Ctrl**; recommended **Scroll Lock** on shared keyboards) to record, release to transcribe and type.
+
+### Command Line Mode
+
+```bash
+# Record for 5 seconds
+./run.sh --record 5
+
+# Record for 10 seconds and type result
+./run.sh --record 10 --type
+
+# Use a different model
+./run.sh --model small --record 5
+
+# Run tests
+./run.sh --test
+```
+
+## Installation
+
+### Prerequisites
+
+**For Wayland (Ubuntu 24.04 default):**
+```bash
+# Install text input tool (wtype preferred for Unicode support)
+sudo apt install wtype alsa-utils python3-venv
+
+# Add user to input group (required for evdev keyboard monitoring)
+sudo usermod -aG input $USER
+# Logout and login for group changes to take effect
+```
+
+**For X11:**
+```bash
+sudo apt install xdotool alsa-utils python3-venv
+```
+
+**Optional (for audio feedback):**
+- `paplay` (usually pre-installed with PulseAudio)
+
+### Python Environment
+
+```bash
+# Create virtual environment
+python3 -m venv ~/speech-env
+
+# Activate and install dependencies
+source ~/speech-env/bin/activate
+pip install faster-whisper numpy soundfile evdev
+```
+
+### Systemd Service (Optional)
+
+```bash
+# Copy service file
+cp systemd/speech-to-text.service ~/.config/systemd/user/
+
+# Reload systemd
+systemctl --user daemon-reload
+
+# Start service
+systemctl --user start speech-to-text
+
+# Enable auto-start on login
+systemctl --user enable speech-to-text
+
+# View logs
+journalctl --user -u speech-to-text -f
+```
+
+## Configuration
+
+Copy the example configuration:
+
+```bash
+mkdir -p ~/.config/speech-to-text
+cp config.example.toml ~/.config/speech-to-text/config.toml
+```
+
+Edit `~/.config/speech-to-text/config.toml` (`[model]` section):
+
+```toml
+[model]
+model = "base"              # tiny, base, small, medium, large
+local_model_path = ""       # Path to local model dir to skip network (e.g., /home/you/models/asr-base)
+download_if_missing = true  # Set to false to stay offline after first download
+device = "cpu"              # cpu or cuda
+compute_type = "int8"       # int8, float16, float32
+language = ""               # Empty for auto-detect, or "en", "uk"
+
+[hotkey]
+trigger_key = "KEY_RIGHTCTRL"   # e.g., KEY_SCROLLLOCK to avoid conflicts
+device_path = ""         # Empty for auto-detect
+
+[feedback]
+enabled = true
+start_sound = "/usr/share/sounds/freedesktop/stereo/message.oga"
+stop_sound = "/usr/share/sounds/freedesktop/stereo/complete.oga"
+```
+
+To avoid any network access on startup, download a model once into a local directory and set `local_model_path` to that folder (set `download_if_missing = false` if you want to keep it strictly offline after the initial download).
+
+## Project Structure
+
+```
+speech-to-text/
+├── run.sh                      # Runner script
+├── README.md                   # This file
+├── config.example.toml         # Example configuration
+│
+├── src/
+│   ├── __init__.py
+│   ├── main.py                 # Main entry point
+│   ├── config.py               # Configuration management
+│   │
+│   ├── core/
+│   │   ├── transcriber.py      # Whisper speech recognition
+│   │   ├── recorder.py         # Audio recording
+│   │   └── text_input.py       # Text automation (ydotool/xdotool)
+│   │
+│   ├── daemon/
+│   │   ├── hotkey_listener.py  # Keyboard monitoring (evdev)
+│   │   ├── state_machine.py    # Service state management
+│   │   └── service.py          # Main daemon loop
+│   │
+│   └── utils/
+│       ├── logging.py          # Logging configuration
+│       └── device_finder.py    # Keyboard device discovery
+│
+├── systemd/
+│   └── speech-to-text.service  # Systemd user service
+│
+└── samples/                    # Test audio samples
+```
+
+## Command Line Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--daemon` | `-d` | Run in daemon mode (hold-to-talk) |
+| `--record SECONDS` | `-r` | Record for specified seconds |
+| `--type` | `-t` | Type transcribed text into active window |
+| `--model MODEL` | `-m` | Whisper model: tiny, base, small, medium |
+| `--config PATH` | `-c` | Path to configuration file |
+| `--verbose` | `-v` | Enable verbose logging |
+| `--quiet` | `-q` | Suppress non-essential output |
+| `--test` | | Run component tests |
+| `--help` | `-h` | Show help message |
+
+## Whisper Models
+
+All models are **multilingual** (99+ languages including Ukrainian and English).
+
+| Model | Size | Speed (CPU) | Accuracy | RAM | Recommended For |
+|-------|------|-------------|----------|-----|-----------------|
+| tiny | 39 MB | ~500ms | Low | 500 MB | Testing only |
+| **base** | 140 MB | **1-2s** | **Good** | **1 GB** | **Default choice** |
+| small | 460 MB | 2-3s | Better | 2 GB | Better accuracy needed |
+| medium | 1.5 GB | 3-5s | High | 5 GB | High-accuracy needs |
+| large | 3+ GB | 5-10s | Highest | 10 GB | Professional use |
+
+**Notes:**
+- Times are for short phrases (5-10 seconds) on modern CPU (Intel i5/i7 or AMD Ryzen)
+- All sizes handle Ukrainian, English, and 99+ other languages equally well
+- `--model` flag or `config.toml` allows runtime selection
+
+## Troubleshooting
+
+### Audio not recording
+
+```bash
+# List audio devices
+arecord -l
+
+# Test recording
+arecord -d 3 -f cd test.wav
+aplay test.wav
+```
+
+### wtype not typing (Wayland)
+
+```bash
+# Verify wtype is installed
+which wtype
+
+# Test typing (wtype takes text as direct argument)
+wtype "test"
+
+# If wtype not available, check fallback to ydotool
+which ydotool
+```
+
+**Note:** wtype is preferred for Unicode/Cyrillic text. If only ydotool is available, Ukrainian text may not type correctly due to ydotool 0.1.8 limitations.
+
+### Keyboard not detected
+
+```bash
+# List input devices
+ls -la /dev/input/event*
+
+# Check group membership
+groups | grep input
+
+# If not in group:
+sudo usermod -aG input $USER
+# Then logout and login
+```
+
+### Service not starting
+
+```bash
+# Check service status
+systemctl --user status speech-to-text
+
+# View logs
+journalctl --user -u speech-to-text -n 50
+
+# Check environment
+echo $XDG_SESSION_TYPE
+echo $XDG_RUNTIME_DIR
+```
+
+### Whisper model error
+
+```bash
+# Activate environment
+source ~/speech-env/bin/activate
+
+# Reinstall
+pip install --upgrade faster-whisper
+```
+
+## How It Works
+
+### Daemon Mode Workflow
+
+1. **Initialization**
+   - Pre-loads Whisper model into memory (first startup ~10 seconds)
+   - Detects keyboard device and subscribes to evdev events
+   - Detects display server (X11/Wayland) and loads appropriate text tool
+   - Detects system language from GNOME keyboard layout
+
+2. **Hold-to-Talk Recording**
+   - Hold configured hotkey (default: Right Ctrl)
+   - Plays start sound (optional)
+   - Records audio in real-time to temporary file
+   - Display: "RECORDING" state
+
+3. **Transcription (on key release)**
+   - Stops recording and audio file
+   - Plays stop sound (optional)
+   - Runs Whisper transcription (CPU-bound, ~1-3 seconds for typical phrase)
+   - Auto-detects language if configured to do so
+   - Display: "TRANSCRIBING" state
+
+4. **Text Typing**
+   - Strips trailing punctuation to avoid layout-specific issues
+   - Types text using wtype (Wayland) or xdotool (X11)
+   - Display: "TYPING" state
+
+5. **Cleanup**
+   - Returns to IDLE state
+   - Ready for next recording
+
+### State Machine
+
+```
+        IDLE
+         ↓ (hotkey press)
+      RECORDING
+         ↓ (hotkey release)
+   TRANSCRIBING
+         ↓ (text obtained)
+       TYPING
+         ↓ (typed)
+        IDLE
+
+    ERROR (any step fails)
+         ↓ (auto-recover)
+        IDLE
+```
+
+**Key Features:**
+- **Language detection:** Keyboard layout checked at press time, not globally
+- **Minimum duration check:** Ignores recordings < 0.5 seconds
+- **Punctuation handling:** Strips trailing dots/ellipsis before typing
+- **Async I/O:** Non-blocking recording and transcription
+- **Error recovery:** Automatic return to IDLE on any error
+
+## Development & Future Enhancements
+
+See [TO-DOS.md](TO-DOS.md) for planned features and improvements:
+
+1. **Alternative Models** - Support for Parakeet TDT, Distil-Whisper
+2. **GNOME Integration** - Visual status indicator in top panel
+3. **Text Processing** - Multiline detection, special character recognition
+4. **Performance** - GPU support, model quantization options
+5. **Git Version Control** - Initial GitHub setup and release tracking
+
+### Running Tests
+
+```bash
+# Test all components
+./run.sh --test
+
+# Interactive mode with test option
+./run.sh
+# Then select option [4] to run tests
+```
+
+Tests verify:
+- ✓ Display server detection
+- ✓ Audio recording capability
+- ✓ Whisper model loading
+- ✓ Text tool availability
+- ✓ Keyboard device detection
+
+## License
+
+Based on [omarchy-speech-to-text](https://github.com/michabbb/omarchy-speech-to-text)

@@ -1,0 +1,28 @@
+[Unit]
+Description=Speech-to-Text Dictation Service
+Documentation=file:///home/dev/speech-to-text/README.md
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/home/dev/speech-to-text/run.sh --daemon
+Restart=on-failure
+RestartSec=5
+
+# Working directory
+WorkingDirectory=/home/dev/speech-to-text
+
+# Environment variables
+Environment="PATH=/home/dev/speech-env/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="XDG_SESSION_TYPE=wayland"
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="DISPLAY=:0"
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
+
+# Logging (captured by journalctl --user)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

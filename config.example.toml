@@ -1,0 +1,84 @@
+# Speech-to-Text Configuration
+# Copy this file to ~/.config/speech-to-text/config.toml to customize
+
+[model]
+# Model size: tiny, base, small, medium, large (choose based on speed/accuracy needs)
+# - tiny/base: Fast but lower accuracy
+# - small: RECOMMENDED for multilingual (Ukrainian + English)
+# - medium/large: Best accuracy but slower
+model = "small"
+
+# Local model directory (set this to avoid re-downloading on startup)
+local_model_path = ""      # e.g., "/home/you/models/asr-small"
+# Download model into local_model_path if it's missing
+download_if_missing = true
+
+# Device: cpu or cuda (if GPU available)
+device = "cpu"
+
+# Compute type for optimization: int8 (fastest on CPU), float16, float32
+compute_type = "int8"
+
+# Language: empty for auto-detect, or specify like "en", "uk", "de"
+# For better non-English accuracy, explicitly set your language:
+# - "uk" for Ukrainian
+# - "en" for English
+# - "" for auto-detect (works better with 'small' model or larger)
+language = ""
+
+# Beam size for search (higher = more accurate but slower)
+beam_size = 5
+
+# Voice Activity Detection (filters out silence)
+vad_filter = true
+
+[audio]
+# Sample rate in Hz (16000 is optimal for these models)
+sample_rate = 16000
+
+# Number of channels (1 = mono, recommended for speech)
+channels = 1
+
+# Audio format (S16_LE = 16-bit signed little-endian)
+format = "S16_LE"
+
+# Minimum recording duration in seconds (shorter recordings are discarded)
+min_duration = 0.5
+
+# Maximum recording duration in seconds (safety limit)
+max_duration = 60
+
+[hotkey]
+# Key to hold for recording
+# Common options: KEY_SCROLLLOCK (safe), KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT
+trigger_key = "KEY_RIGHTCTRL"
+
+# Input device path (empty for auto-detect)
+# Example: /dev/input/event4
+device_path = ""
+
+[feedback]
+# Enable audio feedback sounds
+enabled = true
+
+# Sound to play when recording starts
+start_sound = "/usr/share/sounds/freedesktop/stereo/message.oga"
+
+# Sound to play when recording stops
+stop_sound = "/usr/share/sounds/freedesktop/stereo/complete.oga"
+
+[logging]
+# Log level: DEBUG, INFO, WARNING, ERROR
+level = "INFO"
+
+# Log file path (empty for stderr only, useful for daemon mode)
+file = ""
+
+[display]
+# Display server: empty for auto-detect, or "wayland" / "x11"
+# Auto-detection uses $XDG_SESSION_TYPE environment variable
+server = ""
+
+# Text input tool: "ydotool", "wtype", or "xdotool"
+# Leave empty for auto-detection (Wayland defaults to wtype for Unicode text)
+tool = ""

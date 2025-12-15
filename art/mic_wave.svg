@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.6"/>
+    </linearGradient>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="480" height="320" fill="url(#bg)"/>
+  <g filter="url(#soft)">
+    <path d="M60 200 Q90 140 120 200 T180 200 T240 200 T300 200 T360 200 T420 200"
+          fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+    <path d="M60 200 Q90 240 120 200 T180 200 T240 200 T300 200 T360 200 T420 200"
+          fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+  </g>
+  <g transform="translate(240 130)">
+    <rect x="-36" y="-40" width="72" height="120" rx="20" fill="url(#glow)" stroke="#e0f2fe" stroke-width="4"/>
+    <rect x="-20" y="-52" width="40" height="30" rx="10" fill="#0ea5e9" stroke="#e0f2fe" stroke-width="4"/>
+    <line x1="0" y1="80" x2="0" y2="120" stroke="#e0f2fe" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-26" y1="120" x2="26" y2="120" stroke="#e0f2fe" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g fill="#e0f2fe" font-family="Arial, sans-serif" font-size="18" opacity="0.8">
+    <text x="30" y="40">speech-to-text</text>
+    <text x="30" y="66">calm mic over soft waves</text>
+  </g>
+</svg>
