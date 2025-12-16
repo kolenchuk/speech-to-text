@@ -7,7 +7,7 @@ Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk suppo
 - **Hold-to-talk recording** - Hold a configurable hotkey (default Right Ctrl) to record, release to transcribe
 - **Offline transcription** - Uses Whisper model locally (no internet required)
 - **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
-- **Cross-display server** - Works on both X11 (xdotool) and Wayland (ydotool)
+- **Cross-display server** - Works on both X11 and Wayland (python-uinput)
 - **Auto-typing** - Automatically types transcribed text into active window
 - **Background service** - Runs as systemd user service
 - **Audio feedback** - Optional sounds for recording start/stop
@@ -60,19 +60,14 @@ Hold the configured hotkey (default **Right Ctrl**; recommended **Scroll Lock** 
 
 ### Prerequisites
 
-**For Wayland (Ubuntu 24.04 default):**
+**For both X11 and Wayland:**
 ```bash
-# Install text input tool (wtype preferred for Unicode support)
-sudo apt install wtype alsa-utils python3-venv
+# Install audio utilities
+sudo apt install alsa-utils python3-venv
 
-# Add user to input group (required for evdev keyboard monitoring)
+# Add user to input group (required for evdev and uinput)
 sudo usermod -aG input $USER
 # Logout and login for group changes to take effect
-```
-
-**For X11:**
-```bash
-sudo apt install xdotool alsa-utils python3-venv
 ```
 
 **Optional (for audio feedback):**
@@ -156,7 +151,7 @@ speech-to-text/
 │   ├── core/
 │   │   ├── transcriber.py      # Whisper speech recognition
 │   │   ├── recorder.py         # Audio recording
-│   │   └── text_input.py       # Text automation (ydotool/xdotool)
+│   │   └── text_input.py       # Text input (python-uinput)
 │   │
 │   ├── daemon/
 │   │   ├── hotkey_listener.py  # Keyboard monitoring (evdev)
@@ -217,26 +212,11 @@ arecord -d 3 -f cd test.wav
 aplay test.wav
 ```
 
-### wtype not typing (Wayland)
+### Text not typing
 
 ```bash
-# Verify wtype is installed
-which wtype
-
-# Test typing (wtype takes text as direct argument)
-wtype "test"
-
-# If wtype not available, check fallback to ydotool
-which ydotool
-```
-
-**Note:** wtype is preferred for Unicode/Cyrillic text. If only ydotool is available, Ukrainian text may not type correctly due to ydotool 0.1.8 limitations.
-
-### Keyboard not detected
-
-```bash
-# List input devices
-ls -la /dev/input/event*
+# Check uinput access
+ls -la /dev/uinput
 
 # Check group membership
 groups | grep input
@@ -244,6 +224,16 @@ groups | grep input
 # If not in group:
 sudo usermod -aG input $USER
 # Then logout and login
+```
+
+### Keyboard not detected
+
+```bash
+# List input devices
+ls -la /dev/input/event*
+
+# Check group membership (should include 'input')
+groups | grep input
 ```
 
 ### Service not starting
@@ -295,7 +285,7 @@ pip install --upgrade faster-whisper
 
 4. **Text Typing**
    - Strips trailing punctuation to avoid layout-specific issues
-   - Types text using wtype (Wayland) or xdotool (X11)
+   - Types text using python-uinput (kernel-level, works on X11 and Wayland)
    - Display: "TYPING" state
 
 5. **Cleanup**
