@@ -12,7 +12,7 @@ from ..core.transcriber import Transcriber
 from ..core.recorder import AudioRecorder
 from ..core.text_input import TextInput
 from ..config import Config
-from ..utils.keyboard_layout import detect_current_keyboard_layout
+from ..utils.keyboard_layout import KeyboardLayoutMapper
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class SpeechToTextService:
 
         self.text_input = TextInput(
             display_server=config.display.actual_server,
-            tool=config.display.tool or None,
+            key_delay_ms=config.text_input.key_delay_ms if hasattr(config, 'text_input') else 10,
         )
 
         self.feedback = AudioFeedback(
@@ -115,9 +115,18 @@ class SpeechToTextService:
 
         # Detect keyboard layout NOW (at key press time)
         if self.config.whisper.language == "":
-            self._detected_language = detect_current_keyboard_layout()
-            if self._detected_language:
-                logger.info(f"Detected keyboard layout -> language: {self._detected_language}")
+            mapper = KeyboardLayoutMapper()
+            detected_layout = mapper.detect_current_layout()
+            if detected_layout:
+                # Map GNOME layout codes to Whisper language codes
+                layout_to_language = {
+                    'us': 'en',
+                    'uk': 'uk',
+                    'ua': 'uk',  # GNOME uses 'ua' for Ukrainian, Whisper uses 'uk'
+                    'ru': 'ru',
+                }
+                self._detected_language = layout_to_language.get(detected_layout, detected_layout)
+                logger.info(f"Detected keyboard layout '{detected_layout}' -> language: {self._detected_language}")
             else:
                 logger.info("Could not detect keyboard layout")
                 self._detected_language = None
