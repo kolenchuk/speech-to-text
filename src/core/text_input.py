@@ -9,15 +9,16 @@ using two modes:
    - Excellent Unicode/Cyrillic support
    - LIMITATION: Mixed Latin/Cyrillic text may be garbled (keycodes interpreted by active layout)
 
-2. **clipboard mode**: Uses wl-copy + paste key combination
+2. **clipboard mode**: Uses clipboard + paste key combination
    - Bypasses keyboard layout issues by pasting Unicode text directly
    - Better for mixed-script text (e.g., "Він сказав hello")
-   - Requires wl-clipboard package on Wayland
+   - Requires wl-clipboard package on Wayland or xclip package on X11
 
 Requirements:
     - User must be in 'input' group
     - /dev/uinput must be accessible
-    - For clipboard mode: wl-clipboard package (wl-copy command)
+    - For clipboard mode on Wayland: wl-clipboard package (wl-copy/wl-paste commands)
+    - For clipboard mode on X11: xclip package (xclip command)
 """
 
 import asyncio
@@ -92,7 +93,13 @@ class TextInput:
 
         # Initialize uinput keyboard
         self._init_uinput()
-        logger.info(f"Using python-uinput in {self.mode} mode")
+
+        # Log clipboard backend info
+        if self.mode == "clipboard":
+            clipboard_tool = "wl-clipboard" if self.display_server == "wayland" else "xclip"
+            logger.info(f"Using python-uinput in {self.mode} mode with {clipboard_tool} ({self.display_server})")
+        else:
+            logger.info(f"Using python-uinput in {self.mode} mode")
 
     def _is_uinput_available(self) -> bool:
         """Check if uinput is accessible."""
@@ -113,14 +120,22 @@ class TextInput:
         Raises:
             RuntimeError: If clipboard mode requirements are not met.
         """
-        # Check if wl-copy is available (for Wayland)
-        # On X11, xclip or xsel could be used, but wl-copy is more universal
-        if not shutil.which("wl-copy"):
-            raise RuntimeError(
-                "Clipboard mode requires wl-clipboard package.\n"
-                "Install with: sudo apt install wl-clipboard"
-            )
-        logger.info("Clipboard mode validated: wl-copy available")
+        if self.display_server == "wayland":
+            # Wayland requires wl-clipboard
+            if not shutil.which("wl-copy") or not shutil.which("wl-paste"):
+                raise RuntimeError(
+                    "Clipboard mode on Wayland requires wl-clipboard package.\n"
+                    "Install with: sudo apt install wl-clipboard"
+                )
+            logger.info("Clipboard mode validated: wl-clipboard available (Wayland)")
+        else:
+            # X11 requires xclip
+            if not shutil.which("xclip"):
+                raise RuntimeError(
+                    "Clipboard mode on X11 requires xclip package.\n"
+                    "Install with: sudo apt install xclip"
+                )
+            logger.info("Clipboard mode validated: xclip available (X11)")
 
     def _parse_paste_key_combination(self) -> list:
         """Parse paste key combination string into evdev key codes.
@@ -204,7 +219,14 @@ class TextInput:
             Clipboard contents as bytes, or empty bytes if clipboard is empty/unavailable.
         """
         try:
-            cmd = ["wl-paste", "--primary"] if primary else ["wl-paste"]
+            if self.display_server == "wayland":
+                # Wayland: use wl-paste with --primary flag
+                cmd = ["wl-paste", "--primary"] if primary else ["wl-paste"]
+            else:
+                # X11: use xclip with -selection flag
+                selection = "primary" if primary else "clipboard"
+                cmd = ["xclip", "-selection", selection, "-o"]
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -229,22 +251,38 @@ class TextInput:
         try:
             # Use PRIMARY selection to avoid clipboard history managers
             # Most clipboard managers only track CLIPBOARD, not PRIMARY
-            cmd = ["wl-copy", "--primary"] if primary else ["wl-copy"]
+            if self.display_server == "wayland":
+                # Wayland: use wl-copy with --primary flag
+                cmd = ["wl-copy", "--primary"] if primary else ["wl-copy"]
 
-            # Use Popen to fire-and-forget wl-copy (it forks to background)
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            process.stdin.write(text.encode('utf-8'))
-            process.stdin.close()
+                # Use Popen to fire-and-forget wl-copy (it forks to background)
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                process.stdin.write(text.encode('utf-8'))
+                process.stdin.close()
 
-            # Don't wait for it - wl-copy forks to background
-            # Just give it a moment to start
-            import time
-            time.sleep(0.05)
+                # Don't wait for it - wl-copy forks to background
+                # Just give it a moment to start
+                import time
+                time.sleep(0.05)
+            else:
+                # X11: use xclip with -selection flag
+                selection = "primary" if primary else "clipboard"
+                cmd = ["xclip", "-selection", selection, "-i"]
+
+                # xclip waits for input on stdin
+                result = subprocess.run(
+                    cmd,
+                    input=text.encode('utf-8'),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=1.0,
+                    check=True
+                )
 
             return True
         except Exception as e:
