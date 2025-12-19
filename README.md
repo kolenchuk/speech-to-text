@@ -372,6 +372,3 @@ Tests verify:
 - ✓ Text tool availability
 - ✓ Keyboard device detection
 
-## License
-
-Based on [omarchy-speech-to-text](https://github.com/michabbb/omarchy-speech-to-text)

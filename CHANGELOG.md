@@ -42,19 +42,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Special character recognition requires post-processing
 - Single Whisper model backend (alternative models planned for future release)
 
+## [1.1.0] - 2025-12-19
+
+### Added
+- **Clipboard mode**: New text input mode using PRIMARY selection for mixed Latin/Cyrillic text
+- **Configurable text input modes**: `[text_input]` config section with mode selection (uinput by default)
+- **Language detection in CLI mode**: Fixed keyboard layout detection for `--record --type` command
+
+### Fixed
+- Language detection now works correctly in CLI mode (`--record --type`)
+- Fixed config reference error in service.py (`config.typing` → `config.text_input`)
+- Removed broken auto-layout switching logic
+
+### Changed
+- Text input configuration moved to dedicated `[text_input]` section in config.toml
+- Removed Ukrainian-only language restrictions (now supports auto-detection)
+
 ---
 
 ## Planned Releases
 
-### [1.1.0] - Wayland Optimization
-- Improved wtype integration for better Unicode/Cyrillic support
-- ydotool replaced as default for Wayland
-- Better error handling for missing text input tools
-
 ### [1.2.0] - Enhanced Text Processing
 - Multiline text recognition with paragraph detection
 - Special character and file path post-processing
-- Clipboard integration for complex text
+- Advanced clipboard integration options
 
 ### [2.0.0] - Alternative Models Support
 - Pluggable model backend architecture
