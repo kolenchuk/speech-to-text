@@ -5,6 +5,7 @@ Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk suppo
 ## Features
 
 - **Hold-to-talk recording** - Hold a configurable hotkey (default Right Ctrl) to record, release to transcribe
+- **Double-tap mode** - Optional double-tap activation prevents conflicts with Ctrl shortcuts (Ctrl+Insert, Ctrl+C, Ctrl+V)
 - **Offline transcription** - Uses Whisper model locally (no internet required)
 - **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
 - **Mixed-language dictation** - Handles "Він сказав hello world" perfectly with clipboard mode
@@ -41,7 +42,9 @@ Shows a menu with options:
 systemctl --user start speech-to-text
 ```
 
-Hold the configured hotkey (default **Right Ctrl**; recommended **Scroll Lock** on shared keyboards) to record, release to transcribe and type.
+Hold the configured hotkey (default **Right Ctrl**) to record, release to transcribe and type.
+
+**Note:** If you use Ctrl frequently (Ctrl+Insert, Ctrl+C, Ctrl+V), enable **double-tap mode** to avoid conflicts. See [Double-Tap Mode](#double-tap-mode) below.
 
 ### Command Line Mode
 
@@ -127,8 +130,10 @@ compute_type = "int8"       # int8, float16, float32
 language = ""               # Empty for auto-detect, or "en", "uk"
 
 [hotkey]
-trigger_key = "KEY_RIGHTCTRL"   # e.g., KEY_SCROLLLOCK to avoid conflicts
-device_path = ""         # Empty for auto-detect
+trigger_key = "KEY_RIGHTCTRL"
+device_path = ""                # Empty for auto-detect
+enable_double_tap = false       # Prevent conflicts with Ctrl shortcuts (see below)
+double_tap_timeout_ms = 300     # Max time between taps (when double-tap enabled)
 
 [feedback]
 enabled = true
@@ -162,6 +167,36 @@ key_delay_ms = 10                  # Delay between key events (uinput mode)
 [text_input]
 mode = "clipboard"
 ```
+
+### Double-Tap Mode
+
+**Problem:** If you use Ctrl shortcuts frequently (Ctrl+Insert, Ctrl+C, Ctrl+V, Ctrl+Arrow, etc.), a single Right Ctrl press/hold triggers dictation and prevents these shortcuts from working.
+
+**Solution:** Enable **double-tap mode** - requires double-tapping the hotkey to activate dictation:
+
+```toml
+[hotkey]
+trigger_key = "KEY_RIGHTCTRL"
+enable_double_tap = true        # Enable double-tap mode
+double_tap_timeout_ms = 300     # 300ms window between taps
+```
+
+**How it works:**
+1. **Single tap** → Normal Ctrl behavior (Ctrl+Insert, Ctrl+C, etc. work normally)
+2. **Double-tap quickly** → Arms the listener
+3. **Hold on second tap** → Starts recording
+4. **Release** → Transcribes and types
+
+**Benefits:**
+- ✅ Use Ctrl+Insert, Ctrl+C, Ctrl+V normally
+- ✅ No conflicts with any Ctrl shortcuts
+- ✅ Similar UX to macOS dictation (Fn double-tap)
+- ✅ Works perfectly with vim Ctrl combinations
+
+**Timing adjustment:**
+- **Faster (200ms):** Harder to trigger, fewer accidental activations
+- **Balanced (300ms):** Recommended default
+- **Slower (400ms):** Easier to trigger, might catch accidental double-presses
 
 ## Project Structure
 
@@ -288,6 +323,25 @@ source ~/speech-env/bin/activate
 pip install --upgrade faster-whisper
 ```
 
+### Ctrl shortcuts not working (Ctrl+Insert, Ctrl+C, etc.)
+
+**Problem:** Single Ctrl press triggers dictation, preventing normal Ctrl shortcuts.
+
+**Solution:** Enable double-tap mode in `~/.config/speech-to-text/config.toml`:
+
+```toml
+[hotkey]
+enable_double_tap = true
+double_tap_timeout_ms = 300
+```
+
+Then restart the service:
+```bash
+systemctl --user restart speech-to-text
+```
+
+Now single Ctrl press works normally - only double-tap activates dictation.
+
 ## How It Works
 
 ### Daemon Mode Workflow
@@ -300,6 +354,7 @@ pip install --upgrade faster-whisper
 
 2. **Hold-to-Talk Recording**
    - Hold configured hotkey (default: Right Ctrl)
+   - If double-tap mode enabled: Must double-tap within timeout window first
    - Plays start sound (optional)
    - Records audio in real-time to temporary file
    - Display: "RECORDING" state
