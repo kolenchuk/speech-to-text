@@ -109,6 +109,8 @@ class HotkeyConfig:
     """Hotkey configuration."""
     trigger_key: str = "KEY_RIGHTCTRL"
     device_path: str = ""  # Empty for auto-detect
+    enable_double_tap: bool = False  # Require double-tap to activate (prevents conflicts with Ctrl combinations)
+    double_tap_timeout_ms: int = 300  # Max time between taps in milliseconds
 
     @property
     def key_code(self) -> int:
@@ -230,6 +232,8 @@ class Config:
             config.hotkey = HotkeyConfig(
                 trigger_key=h.get("trigger_key", config.hotkey.trigger_key),
                 device_path=h.get("device_path", config.hotkey.device_path),
+                enable_double_tap=h.get("enable_double_tap", config.hotkey.enable_double_tap),
+                double_tap_timeout_ms=h.get("double_tap_timeout_ms", config.hotkey.double_tap_timeout_ms),
             )
 
         if "feedback" in data:
@@ -278,6 +282,9 @@ class Config:
         print()
         print(f"Hotkey:            {self.hotkey.trigger_key}")
         print(f"Device Path:       {self.hotkey.device_path or 'auto-detect'}")
+        print(f"Double-Tap Mode:   {'enabled' if self.hotkey.enable_double_tap else 'disabled'}")
+        if self.hotkey.enable_double_tap:
+            print(f"Double-Tap Timeout: {self.hotkey.double_tap_timeout_ms} ms")
         print()
         print(f"Display Server:    {self.display.actual_server}")
         print(f"Audio Feedback:    {'enabled' if self.feedback.enabled else 'disabled'}")

@@ -253,6 +253,8 @@ class SpeechToTextService:
             device_path=self.config.hotkey.device_path or None,
             on_press=self._on_key_press,
             on_release=self._on_key_release,
+            enable_double_tap=self.config.hotkey.enable_double_tap,
+            double_tap_timeout_ms=self.config.hotkey.double_tap_timeout_ms,
         )
 
         # Set up signal handlers
@@ -260,7 +262,10 @@ class SpeechToTextService:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self._handle_signal)
 
-        logger.info(f"Service ready. Hold {self.config.hotkey.trigger_key} to record.")
+        if self.config.hotkey.enable_double_tap:
+            logger.info(f"Service ready. Double-tap {self.config.hotkey.trigger_key} and hold to record.")
+        else:
+            logger.info(f"Service ready. Hold {self.config.hotkey.trigger_key} to record.")
 
         try:
             await self.listener.start()

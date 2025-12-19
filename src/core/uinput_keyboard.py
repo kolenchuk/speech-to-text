@@ -116,6 +116,9 @@ class UInputKeyboard:
                     ecodes.KEY_RIGHTBRACE, ecodes.KEY_BACKSLASH, ecodes.KEY_SEMICOLON,
                     ecodes.KEY_APOSTROPHE, ecodes.KEY_GRAVE, ecodes.KEY_COMMA,
                     ecodes.KEY_DOT, ecodes.KEY_SLASH,
+
+                    # Mouse buttons (for middle-click paste from PRIMARY selection)
+                    ecodes.BTN_LEFT, ecodes.BTN_RIGHT, ecodes.BTN_MIDDLE,
                 ]
             }
 

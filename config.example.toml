@@ -57,6 +57,20 @@ trigger_key = "KEY_RIGHTCTRL"
 # Example: /dev/input/event4
 device_path = ""
 
+# Double-tap mode: Require double-tap to activate (prevents conflicts with key combinations)
+# - false: Single press/hold activates recording (CONFLICT: can't use Ctrl+Insert, Ctrl+C, etc.)
+# - true: Must double-tap the key, then hold on second tap to record
+#   * Allows normal use of Ctrl+Insert, Ctrl+C, Ctrl+V, etc.
+#   * Similar to macOS dictation (Fn double-tap)
+#   * RECOMMENDED if you use Ctrl combinations frequently
+enable_double_tap = false
+
+# Maximum time between taps in milliseconds (only used when enable_double_tap = true)
+# - Lower value (200ms): Faster tapping required, less chance of accidental trigger
+# - Higher value (400ms): Easier to trigger, but might catch accidental double-presses
+# - Recommended: 300ms (balanced)
+double_tap_timeout_ms = 300
+
 [feedback]
 # Enable audio feedback sounds
 enabled = true

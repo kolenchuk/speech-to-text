@@ -209,6 +209,23 @@ class TextInput:
 
         logger.debug(f"Emulated paste key combination: {self.paste_key_combination}")
 
+    async def _emulate_middle_click(self):
+        """Emulate middle mouse button click to paste from PRIMARY selection.
+
+        Middle-click is the traditional X11/Wayland way to paste from PRIMARY selection.
+        This works reliably across display servers when Shift+Insert doesn't.
+        """
+        # Click middle button (press and release)
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, ecodes.BTN_MIDDLE, 1)  # Press
+        self._uinput_keyboard._device.syn()
+        await asyncio.sleep(0.01)
+
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, ecodes.BTN_MIDDLE, 0)  # Release
+        self._uinput_keyboard._device.syn()
+        await asyncio.sleep(0.01)
+
+        logger.debug("Emulated middle-click to paste from PRIMARY selection")
+
     def _clipboard_get(self, primary: bool = False) -> bytes:
         """Get current clipboard contents.
 
@@ -317,10 +334,11 @@ class TextInput:
             # Small delay to ensure PRIMARY selection is ready
             await asyncio.sleep(0.05)
 
-            # Emulate paste key combination (Shift+Insert pastes from PRIMARY)
-            await self._emulate_paste_key()
+            # Emulate middle-click to paste from PRIMARY selection
+            # Note: Shift+Insert doesn't work on all Wayland compositors with PRIMARY
+            await self._emulate_middle_click()
 
-            logger.info("Text pasted successfully via PRIMARY selection")
+            logger.info("Text pasted successfully via PRIMARY selection (middle-click)")
 
             # Wait for paste to complete
             await asyncio.sleep(0.1)
