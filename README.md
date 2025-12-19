@@ -7,11 +7,14 @@ Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk suppo
 - **Hold-to-talk recording** - Hold a configurable hotkey (default Right Ctrl) to record, release to transcribe
 - **Offline transcription** - Uses Whisper model locally (no internet required)
 - **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
-- **Cross-display server** - Works on both X11 and Wayland (python-uinput)
+- **Mixed-language dictation** - Handles "Він сказав hello world" perfectly with clipboard mode
+- **Cross-display server** - Works on both X11 and Wayland
+- **Dual text input modes** - uinput (fast) or clipboard (mixed-script friendly)
 - **Auto-typing** - Automatically types transcribed text into active window
 - **Background service** - Runs as systemd user service
 - **Audio feedback** - Optional sounds for recording start/stop
 - **CPU optimized** - Runs on CPU with int8 optimization
+- **Privacy-focused** - Clipboard mode uses PRIMARY selection (doesn't pollute clipboard history)
 
 ## Quick Start
 
@@ -62,16 +65,16 @@ Hold the configured hotkey (default **Right Ctrl**; recommended **Scroll Lock** 
 
 **For both X11 and Wayland:**
 ```bash
-# Install audio utilities
-sudo apt install alsa-utils python3-venv
+# Install audio utilities and clipboard tools
+sudo apt install alsa-utils python3-venv wl-clipboard
 
 # Add user to input group (required for evdev and uinput)
 sudo usermod -aG input $USER
 # Logout and login for group changes to take effect
 ```
 
-**Optional (for audio feedback):**
-- `paplay` (usually pre-installed with PulseAudio)
+**Optional:**
+- `paplay` (usually pre-installed with PulseAudio) - for audio feedback
 
 ### Python Environment
 
@@ -112,7 +115,7 @@ mkdir -p ~/.config/speech-to-text
 cp config.example.toml ~/.config/speech-to-text/config.toml
 ```
 
-Edit `~/.config/speech-to-text/config.toml` (`[model]` section):
+Edit `~/.config/speech-to-text/config.toml`:
 
 ```toml
 [model]
@@ -131,9 +134,34 @@ device_path = ""         # Empty for auto-detect
 enabled = true
 start_sound = "/usr/share/sounds/freedesktop/stereo/message.oga"
 stop_sound = "/usr/share/sounds/freedesktop/stereo/complete.oga"
+
+[text_input]
+# Text input mode: "uinput" or "clipboard"
+mode = "uinput"                    # Use "clipboard" for mixed Latin/Cyrillic text
+paste_key_combination = "shift+insert"  # For clipboard mode
+key_delay_ms = 10                  # Delay between key events (uinput mode)
 ```
 
-To avoid any network access on startup, download a model once into a local directory and set `local_model_path` to that folder (set `download_if_missing = false` if you want to keep it strictly offline after the initial download).
+**To avoid any network access on startup**, download a model once into a local directory and set `local_model_path` to that folder (set `download_if_missing = false` if you want to keep it strictly offline after the initial download).
+
+### Text Input Modes
+
+**uinput mode (default):**
+- Fast, direct keycode injection
+- Works great for single-language dictation
+- **Limitation:** Mixed Latin/Cyrillic text may be garbled (e.g., "hello" with Ukrainian layout → "ру|ддщ")
+
+**clipboard mode (recommended for mixed languages):**
+- Solves mixed-script problem completely
+- "Він сказав hello world" types correctly regardless of keyboard layout
+- Uses PRIMARY selection (Shift+Insert) - **doesn't pollute clipboard history**
+- Your regular clipboard (Ctrl+C/V) remains untouched
+
+**To enable clipboard mode:**
+```toml
+[text_input]
+mode = "clipboard"
+```
 
 ## Project Structure
 
@@ -319,13 +347,12 @@ pip install --upgrade faster-whisper
 
 ## Development & Future Enhancements
 
-See [TO-DOS.md](TO-DOS.md) for planned features and improvements:
+Planned features and improvements:
 
 1. **Alternative Models** - Support for Parakeet TDT, Distil-Whisper
 2. **GNOME Integration** - Visual status indicator in top panel
 3. **Text Processing** - Multiline detection, special character recognition
 4. **Performance** - GPU support, model quantization options
-5. **Git Version Control** - Initial GitHub setup and release tracking
 
 ### Running Tests
 

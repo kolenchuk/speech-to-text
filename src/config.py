@@ -70,7 +70,7 @@ class WhisperConfig:
                         # Map keyboard layouts to Whisper language codes
                         layout_map = {
                             'us': 'en', 'gb': 'en', 'uk': 'en',  # English layouts
-                            'ua': 'uk', 'ru': 'ru',  # Ukrainian, Russian
+                            'ua': 'uk',  # Ukrainian
                             'de': 'de', 'fr': 'fr', 'es': 'es', 'it': 'it',
                             'pl': 'pl', 'cz': 'cs', 'sk': 'sk',
                         }
@@ -147,6 +147,14 @@ class DisplayConfig:
 
 
 @dataclass
+class TextInputConfig:
+    """Text input configuration."""
+    mode: str = "uinput"  # Input mode: "uinput" or "clipboard"
+    paste_key_combination: str = "shift+insert"  # Paste key for clipboard mode
+    key_delay_ms: int = 10  # Delay between key events in milliseconds (uinput mode)
+
+
+@dataclass
 class Config:
     """Main configuration container."""
     whisper: WhisperConfig = field(default_factory=WhisperConfig)
@@ -155,6 +163,7 @@ class Config:
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
+    text_input: TextInputConfig = field(default_factory=TextInputConfig)
 
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "Config":
@@ -245,6 +254,14 @@ class Config:
                 tool=d.get("tool", config.display.tool),
             )
 
+        if "text_input" in data:
+            ti = data["text_input"]
+            config.text_input = TextInputConfig(
+                mode=ti.get("mode", config.text_input.mode),
+                paste_key_combination=ti.get("paste_key_combination", config.text_input.paste_key_combination),
+                key_delay_ms=ti.get("key_delay_ms", config.text_input.key_delay_ms),
+            )
+
         return config
 
     def print_config(self):
@@ -265,6 +282,10 @@ class Config:
         print(f"Display Server:    {self.display.actual_server}")
         print(f"Audio Feedback:    {'enabled' if self.feedback.enabled else 'disabled'}")
         print(f"Log Level:         {self.logging.level}")
+        print()
+        print(f"Text Input Mode:   {self.text_input.mode}")
+        print(f"Paste Key Combo:   {self.text_input.paste_key_combination}")
+        print(f"Key Delay:         {self.text_input.key_delay_ms} ms")
         print("=" * 60)
 
 

@@ -46,13 +46,19 @@ def run_tests(config: Config) -> bool:
     tests_passed = 0
     tests_total = 0
 
-    # Test 1: Display server detection
+    # Test 1: Display server detection and text input mode
     tests_total += 1
-    print("Test 1: Display Server Detection")
+    print("Test 1: Display Server Detection and Text Input")
     display = config.display.actual_server
-    text_input = TextInput(display)
+    text_input = TextInput(
+        display_server=display,
+        key_delay_ms=config.text_input.key_delay_ms,
+        mode=config.text_input.mode,
+        paste_key_combination=config.text_input.paste_key_combination,
+    )
     print(f"  Display server: {display}")
     print(f"  Text tool: {text_input.tool}")
+    print(f"  Text input mode: {config.text_input.mode}")
     print("  Result: PASS")
     tests_passed += 1
     print()
@@ -166,13 +172,31 @@ def record_and_transcribe(
     print("STEP 2: Transcribing")
     print("=" * 60)
 
+    # Detect keyboard layout for language hint (like daemon mode does)
+    detected_language = None
+    if config.whisper.language == "":
+        from src.utils.keyboard_layout import KeyboardLayoutMapper
+        mapper = KeyboardLayoutMapper()
+        detected_layout = mapper.detect_current_layout()
+        if detected_layout:
+            # Map GNOME layout codes to Whisper language codes
+            layout_to_language = {
+                'us': 'en',
+                'uk': 'uk',
+                'ua': 'uk',  # GNOME uses 'ua' for Ukrainian, Whisper uses 'uk'
+            }
+            detected_language = layout_to_language.get(detected_layout, detected_layout)
+            print(f"Detected keyboard layout '{detected_layout}' -> language: {detected_language}")
+        else:
+            print("Could not detect keyboard layout, using Whisper auto-detect")
+
     transcriber = Transcriber(
         model=config.whisper.model,
         local_model_path=config.whisper.local_model_path or None,
         download_if_missing=config.whisper.download_if_missing,
         device=config.whisper.device,
         compute_type=config.whisper.compute_type,
-        language=config.whisper.language or None,
+        language=detected_language or config.whisper.language or None,
     )
 
     text = transcriber.transcribe(audio_file)
@@ -198,7 +222,12 @@ def record_and_transcribe(
         print("Text will be typed in 3 seconds...")
         time.sleep(3)
 
-        text_input = TextInput(config.display.actual_server)
+        text_input = TextInput(
+            display_server=config.display.actual_server,
+            key_delay_ms=config.text_input.key_delay_ms,
+            mode=config.text_input.mode,
+            paste_key_combination=config.text_input.paste_key_combination,
+        )
         text_input.type_text_sync(text)
 
     return text

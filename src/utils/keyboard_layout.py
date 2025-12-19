@@ -19,9 +19,194 @@ key codes based on the detected layout.
 from typing import Tuple, List, Optional, Dict
 import subprocess
 import logging
+import unicodedata
 from evdev import ecodes
 
 logger = logging.getLogger(__name__)
+
+
+# Script detection constants
+SCRIPT_LATIN = "latin"
+SCRIPT_CYRILLIC = "cyrillic"
+SCRIPT_MIXED = "mixed"
+SCRIPT_OTHER = "other"
+
+
+def detect_text_script(text: str) -> str:
+    """Detect the dominant script of a text string.
+
+    Analyzes Unicode categories to determine if text is primarily Latin,
+    Cyrillic, mixed, or other script.
+
+    Args:
+        text: Text string to analyze.
+
+    Returns:
+        One of: "latin", "cyrillic", "mixed", "other"
+    """
+    if not text:
+        return SCRIPT_OTHER
+
+    latin_count = 0
+    cyrillic_count = 0
+    total_letters = 0
+
+    for char in text:
+        # Skip non-letter characters (spaces, punctuation, numbers)
+        if not char.isalpha():
+            continue
+
+        total_letters += 1
+
+        # Check Unicode script property
+        try:
+            name = unicodedata.name(char, "").upper()
+            if "CYRILLIC" in name:
+                cyrillic_count += 1
+            elif "LATIN" in name or char.isascii():
+                latin_count += 1
+        except ValueError:
+            pass
+
+    if total_letters == 0:
+        return SCRIPT_OTHER
+
+    latin_ratio = latin_count / total_letters
+    cyrillic_ratio = cyrillic_count / total_letters
+
+    # Thresholds for classification
+    if latin_ratio > 0.8:
+        return SCRIPT_LATIN
+    elif cyrillic_ratio > 0.8:
+        return SCRIPT_CYRILLIC
+    elif latin_ratio > 0.2 and cyrillic_ratio > 0.2:
+        return SCRIPT_MIXED
+    elif latin_ratio > cyrillic_ratio:
+        return SCRIPT_LATIN
+    elif cyrillic_ratio > latin_ratio:
+        return SCRIPT_CYRILLIC
+    else:
+        return SCRIPT_OTHER
+
+
+def get_layout_for_script(script: str) -> str:
+    """Get the appropriate keyboard layout code for a script.
+
+    Args:
+        script: Script type from detect_text_script().
+
+    Returns:
+        Layout code ("us" for Latin, "ua" for Cyrillic, "us" as default).
+    """
+    if script == SCRIPT_LATIN:
+        return "us"
+    elif script == SCRIPT_CYRILLIC:
+        return "ua"
+    else:
+        return "us"  # Default to US for mixed/other
+
+
+def _get_char_script(char: str) -> str:
+    """Get script type for a single character.
+
+    Args:
+        char: Single character.
+
+    Returns:
+        "latin", "cyrillic", or "neutral" (for spaces only).
+    """
+    # Space and newline are truly neutral
+    if char in ' \t\n\r':
+        return "neutral"
+
+    # Numbers and ASCII punctuation should use Latin/US layout
+    # because Ukrainian layout has different key positions
+    if char.isdigit() or (char.isascii() and not char.isalpha()):
+        return SCRIPT_LATIN
+
+    if not char.isalpha():
+        return "neutral"
+
+    try:
+        name = unicodedata.name(char, "").upper()
+        if "CYRILLIC" in name:
+            return SCRIPT_CYRILLIC
+        elif "LATIN" in name or char.isascii():
+            return SCRIPT_LATIN
+    except ValueError:
+        pass
+
+    return "neutral"
+
+
+def split_text_by_script(text: str) -> list:
+    """Split text into segments by script (Latin vs Cyrillic).
+
+    Groups consecutive characters of the same script together.
+    Neutral characters (spaces, punctuation) are attached to the
+    preceding segment or the following segment if at the start.
+
+    Args:
+        text: Text to split.
+
+    Returns:
+        List of (segment_text, script) tuples where script is
+        "latin", "cyrillic", or "neutral".
+
+    Example:
+        >>> split_text_by_script("Hello Привіт World")
+        [("Hello ", "latin"), ("Привіт ", "cyrillic"), ("World", "latin")]
+    """
+    if not text:
+        return []
+
+    segments = []
+    current_segment = ""
+    current_script = None
+
+    for char in text:
+        char_script = _get_char_script(char)
+
+        if char_script == "neutral":
+            # Neutral chars join the current segment
+            current_segment += char
+        elif current_script is None or current_script == "neutral":
+            # First non-neutral char sets the script
+            current_segment += char
+            current_script = char_script
+        elif char_script == current_script:
+            # Same script, continue segment
+            current_segment += char
+        else:
+            # Script changed - save current segment and start new one
+            if current_segment:
+                segments.append((current_segment, current_script or "neutral"))
+            current_segment = char
+            current_script = char_script
+
+    # Don't forget the last segment
+    if current_segment:
+        segments.append((current_segment, current_script or "neutral"))
+
+    return segments
+
+
+def script_matches_layout(script: str, layout: str) -> bool:
+    """Check if a text script matches the current keyboard layout.
+
+    Args:
+        script: Script type from detect_text_script().
+        layout: Current keyboard layout code (e.g., "us", "ua", "uk").
+
+    Returns:
+        True if script and layout are compatible.
+    """
+    if script == SCRIPT_LATIN:
+        return layout in ("us", "en", "gb")
+    elif script == SCRIPT_CYRILLIC:
+        return layout in ("ua", "uk")
+    else:
+        return True  # Mixed/other - assume compatible
 
 
 class KeyboardLayoutMapper:
@@ -251,11 +436,12 @@ class KeyboardLayoutMapper:
         }
 
     def detect_current_layout(self) -> str:
-        """Detect current keyboard layout from GNOME settings.
+        """Detect current keyboard layout from GNOME settings or IBus.
 
         Returns:
             str: Layout code (e.g., "us", "ua", "ru") or "us" as fallback.
         """
+        # First try gsettings MRU (most reliable when switching via GNOME UI)
         try:
             import re
 
@@ -311,13 +497,37 @@ class KeyboardLayoutMapper:
                     selected_layout = layouts[current_index]
 
                 if selected_layout:
-                    logger.debug(f"Detected keyboard layout: {selected_layout}")
+                    logger.debug(f"Detected keyboard layout via gsettings: {selected_layout}")
                     return selected_layout
 
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError, IndexError) as e:
             logger.debug(f"Failed to detect keyboard layout via gsettings: {e}")
         except FileNotFoundError:
-            logger.debug("gsettings not found, assuming 'us' layout")
+            logger.debug("gsettings not found, trying ibus")
+
+        # Fallback to IBus engine query
+        try:
+            result = subprocess.run(
+                ['ibus', 'engine'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+
+            if result.returncode == 0:
+                engine = result.stdout.strip()
+                # Parse engine name: xkb:us::eng -> us, xkb:ua::ukr -> ua
+                if engine.startswith('xkb:'):
+                    parts = engine.split(':')
+                    if len(parts) >= 2:
+                        layout = parts[1]
+                        logger.debug(f"Detected keyboard layout via ibus: {layout} (engine: {engine})")
+                        return layout
+
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
+            logger.debug(f"Failed to detect keyboard layout via ibus: {e}")
+        except FileNotFoundError:
+            logger.debug("ibus not found")
 
         # Fallback to US layout
         logger.debug("Using fallback layout: us")
@@ -379,6 +589,160 @@ class KeyboardLayoutMapper:
         # Unmappable character - log warning and return space as fallback
         logger.warning(f"Character '{char}' (U+{ord(char):04X}) not mappable in layout '{layout}', using space")
         return (ecodes.KEY_SPACE, [])
+
+    def get_available_layouts(self) -> List[str]:
+        """Get list of available keyboard layouts from GNOME settings.
+
+        Returns:
+            List of layout codes (e.g., ["us", "ua"]).
+        """
+        try:
+            import re
+
+            result = subprocess.run(
+                ['gsettings', 'get', 'org.gnome.desktop.input-sources', 'sources'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+
+            if result.returncode == 0:
+                sources_str = result.stdout.strip()
+                layouts = re.findall(r"'([a-z]{2,3})'(?:\),|\)])", sources_str)
+                return layouts
+
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
+            logger.debug(f"Failed to get available layouts: {e}")
+        except FileNotFoundError:
+            logger.debug("gsettings not found")
+
+        return ["us"]  # Fallback
+
+    def get_layout_index(self, layout: str) -> int:
+        """Get the index of a layout in the available layouts list.
+
+        Args:
+            layout: Layout code to find (e.g., "us", "ua").
+
+        Returns:
+            Index of layout, or -1 if not found.
+        """
+        layouts = self.get_available_layouts()
+        for i, l in enumerate(layouts):
+            if l == layout or l.startswith(layout) or layout.startswith(l):
+                return i
+        return -1
+
+    def switch_layout(self, layout: str) -> bool:
+        """Switch system keyboard layout via IBus and XKB.
+
+        Args:
+            layout: Layout code to switch to (e.g., "us", "ua").
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        # Map layout codes to IBus engine names
+        layout_to_engine = {
+            'us': 'xkb:us::eng',
+            'en': 'xkb:us::eng',
+            'ua': 'xkb:ua::ukr',
+            'uk': 'xkb:ua::ukr',
+        }
+
+        # Map layout codes to XKB layout names
+        layout_to_xkb = {
+            'us': 'us',
+            'en': 'us',
+            'ua': 'ua',
+            'uk': 'ua',
+        }
+
+        xkb_layout = layout_to_xkb.get(layout, layout)
+        engine = layout_to_engine.get(layout)
+
+        success = False
+
+        # Try IBus first
+        if engine:
+            try:
+                result = subprocess.run(
+                    ['ibus', 'engine', engine],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if result.returncode == 0:
+                    logger.debug(f"IBus engine set to {engine}")
+                    success = True
+            except Exception as e:
+                logger.debug(f"IBus switch failed: {e}")
+
+        # Also try setxkbmap for XKB-level switch (affects uinput)
+        try:
+            result = subprocess.run(
+                ['setxkbmap', xkb_layout],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                logger.debug(f"XKB layout set to {xkb_layout}")
+                success = True
+        except Exception as e:
+            logger.debug(f"setxkbmap failed: {e}")
+
+        if success:
+            logger.info(f"Switched keyboard layout to '{layout}'")
+            self._current_layout = layout
+            self._layout_cache_valid = True
+            return True
+        else:
+            logger.error(f"Failed to switch layout to '{layout}'")
+            return False
+
+    def switch_layout_for_text(self, text: str) -> Optional[str]:
+        """Switch layout to match text script, return original layout.
+
+        Detects the script of the text and switches to appropriate layout
+        if there's a mismatch.
+
+        Args:
+            text: Text that will be typed.
+
+        Returns:
+            Original layout code if switched, None if no switch needed.
+        """
+        current_layout = self.detect_current_layout()
+        text_script = detect_text_script(text)
+
+        logger.debug(f"Text script: {text_script}, current layout: {current_layout}")
+
+        if script_matches_layout(text_script, current_layout):
+            logger.debug("Script matches layout, no switch needed")
+            return None
+
+        # Need to switch layout
+        target_layout = get_layout_for_script(text_script)
+        logger.info(f"Script mismatch: text is {text_script}, layout is {current_layout}. Switching to {target_layout}")
+
+        if self.switch_layout(target_layout):
+            return current_layout  # Return original for restoration
+        else:
+            logger.warning(f"Failed to switch layout to {target_layout}")
+            return None
+
+    def restore_layout(self, layout: str) -> bool:
+        """Restore previously saved layout.
+
+        Args:
+            layout: Layout code to restore.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        logger.debug(f"Restoring layout to '{layout}'")
+        return self.switch_layout(layout)
 
 
 # Global singleton instance

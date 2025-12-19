@@ -75,3 +75,7 @@ Thumbs.db
 TO-DOS.md
 whats-next.md
 CLAUDE.md
+
+# Temporary files and prompts
+COMMIT_MESSAGE.txt
+prompts/

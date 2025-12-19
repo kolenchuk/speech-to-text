@@ -87,7 +87,9 @@ class SpeechToTextService:
 
         self.text_input = TextInput(
             display_server=config.display.actual_server,
-            key_delay_ms=config.text_input.key_delay_ms if hasattr(config, 'text_input') else 10,
+            key_delay_ms=config.text_input.key_delay_ms,
+            mode=config.text_input.mode,
+            paste_key_combination=config.text_input.paste_key_combination,
         )
 
         self.feedback = AudioFeedback(
@@ -123,7 +125,6 @@ class SpeechToTextService:
                     'us': 'en',
                     'uk': 'uk',
                     'ua': 'uk',  # GNOME uses 'ua' for Ukrainian, Whisper uses 'uk'
-                    'ru': 'ru',
                 }
                 self._detected_language = layout_to_language.get(detected_layout, detected_layout)
                 logger.info(f"Detected keyboard layout '{detected_layout}' -> language: {self._detected_language}")

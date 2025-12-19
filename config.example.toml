@@ -82,3 +82,28 @@ server = ""
 # Text input tool: "ydotool", "wtype", or "xdotool"
 # Leave empty for auto-detection (Wayland defaults to wtype for Unicode text)
 tool = ""
+
+[text_input]
+# Text input mode: "uinput" or "clipboard"
+# - "uinput": Direct keycode injection (works on X11 and Wayland)
+#   * Excellent Unicode/Cyrillic support
+#   * LIMITATION: Mixed Latin/Cyrillic text may be garbled (keycodes interpreted by active layout)
+#   * Example issue: "hello" typed with Ukrainian layout becomes "ру|ддщ"
+# - "clipboard": Copy text to PRIMARY selection and emulate paste key
+#   * Bypasses keyboard layout issues
+#   * Better for mixed-script text (e.g., "Він сказав hello")
+#   * Uses PRIMARY selection to avoid polluting clipboard history
+#   * Your regular clipboard (Ctrl+C/V) remains untouched
+#   * Requires wl-clipboard package on Wayland
+mode = "uinput"
+
+# Paste key combination for clipboard mode (not used in uinput mode)
+# IMPORTANT: Use "shift+insert" to paste from PRIMARY selection
+# - "shift+insert" (RECOMMENDED - pastes from PRIMARY, avoids clipboard managers)
+# - "ctrl+shift+v" (uses CLIPBOARD - will appear in clipboard history)
+# Note: Avoid "ctrl+v" as it conflicts with some applications
+paste_key_combination = "shift+insert"
+
+# Delay between key events in milliseconds (for uinput mode)
+# Higher values = more reliable but slower typing
+key_delay_ms = 10
