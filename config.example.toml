@@ -137,3 +137,28 @@ paste_key_combination = "shift+insert"
 # Delay between key events in milliseconds (for uinput mode)
 # Higher values = more reliable but slower typing
 key_delay_ms = 10
+
+[voice_commands]
+# Voice Command Recognition
+# When enabled, certain spoken words trigger keyboard actions instead of being typed
+# Currently supported commands:
+# - "ENTER" - Presses the ENTER key instead of typing the word "ENTER"
+#
+# How it works:
+# - The system detects command words in your transcribed speech
+# - Commands are case-insensitive: "enter", "ENTER", "Enter" all work
+# - Word boundaries are respected: saying "center" won't trigger ENTER
+# - Mixed usage: "submit form ENTER" types "submit form " then presses ENTER
+#
+# Examples:
+# - Say: "submit form ENTER" → Result: Types "submit form" + presses ENTER key
+# - Say: "first line ENTER second line" → Types "first line", presses ENTER, types "second line"
+# - Say: "did you center that" → Types "did you center that" (no command triggered)
+#
+# Future commands (not yet implemented):
+# - "TAB" - Presses TAB key for form field navigation
+# - "ESCAPE" - Presses ESC key to close dialogs
+# - "BACKSPACE" - Presses backspace to delete characters
+#
+# Note: This feature is always enabled and requires no configuration.
+# Commands are defined in src/core/text_input.py

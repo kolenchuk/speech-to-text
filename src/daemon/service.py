@@ -116,8 +116,9 @@ class SpeechToTextService:
 
         logger.info("Hotkey pressed - starting recording")
 
-        # Detect keyboard layout NOW (at key press time)
+        # Detect keyboard layout and use it to guide Whisper language detection
         if self.config.whisper.language == "":
+            from ..utils.keyboard_layout import KeyboardLayoutMapper
             mapper = KeyboardLayoutMapper()
             detected_layout = mapper.detect_current_layout()
             if detected_layout:
@@ -221,14 +222,15 @@ class SpeechToTextService:
             logger.info("Removed trailing punctuation before typing")
             text = cleaned_text
 
-        # Type text
+        # Type text (with voice command recognition)
         logger.info(f"Transcribed: {text[:50]}...")
 
         if not self.state.start_typing():
             return
 
         try:
-            success = await self.text_input.type_text(text)
+            # Use command-aware typing to handle special voice commands like "ENTER"
+            success = await self.text_input.process_and_type_with_commands(text)
             if not success:
                 logger.warning("Text typing may have failed")
         except Exception as e:

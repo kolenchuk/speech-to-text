@@ -7,6 +7,7 @@ Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk suppo
 - **Hold-to-talk recording** - Hold a configurable hotkey (keyboard or mouse button) to record, release to transcribe
 - **Multi-device support** - Use both keyboard keys AND mouse buttons simultaneously as triggers
 - **Per-key double-tap mode** - Different behavior for each trigger (e.g., double-tap keyboard, single-click mouse)
+- **Voice commands** - Say "ENTER" to press Enter key instead of typing the word
 - **Offline transcription** - Uses Whisper model locally (no internet required)
 - **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
 - **Mixed-language dictation** - Handles "Він сказав hello world" perfectly with clipboard mode
@@ -254,6 +255,25 @@ double_tap_timeout_ms = 300     # 300ms window between taps
 - **Faster (200ms):** Harder to trigger, fewer accidental activations
 - **Balanced (300ms):** Recommended default
 - **Slower (400ms):** Easier to trigger, might catch accidental double-presses
+
+### Voice Commands
+
+Say special words to trigger keyboard actions instead of typing the words:
+
+| Voice Command | Action | Works In |
+|---------------|--------|----------|
+| "ENTER" | Press Enter key | English |
+| "ЕНТЕР" | Press Enter key | Ukrainian |
+
+**Examples:**
+- Say "Submit form ENTER" → types "Submit form" then presses Enter
+- Say "First line ENTER Second line" → types on two lines
+- Say "Тест ЕНТЕР Продовження" → types Ukrainian text on two lines
+
+**Notes:**
+- Commands are case-insensitive ("enter", "ENTER", "Enter" all work)
+- Punctuation after commands is automatically stripped
+- Word boundaries are respected ("center" won't trigger ENTER)
 
 ## Project Structure
 

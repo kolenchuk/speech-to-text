@@ -251,6 +251,18 @@ class MultiHotkeyListener:
         self._running = False
         logger.info("Stopping multi-hotkey listener")
 
+        # Cancel all monitoring tasks to break out of async_read_loop()
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
+
+        # Close devices to release file handles immediately
+        for device in self._devices:
+            try:
+                device.close()
+            except:
+                pass
+
     @property
     def is_running(self) -> bool:
         """Check if listener is running."""

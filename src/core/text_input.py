@@ -24,9 +24,11 @@ Requirements:
 import asyncio
 import logging
 import os
+import re
 import shutil
 import subprocess
-from typing import Optional
+import time
+from typing import Optional, List, Tuple
 
 from evdev import ecodes
 from .uinput_keyboard import UInputKeyboard
@@ -100,6 +102,20 @@ class TextInput:
             logger.info(f"Using python-uinput in {self.mode} mode with {clipboard_tool} ({self.display_server})")
         else:
             logger.info(f"Using python-uinput in {self.mode} mode")
+
+        # Special command mapping: word -> key code
+        # These are voice commands that trigger key presses instead of typing
+        # Pattern: Maps the spoken word to the corresponding evdev keycode
+        # Why: Enables hands-free form submission, navigation, etc.
+        # Includes English and Ukrainian variants
+        self._special_commands = {
+            "ENTER": ecodes.KEY_ENTER,
+            "ЕНТЕР": ecodes.KEY_ENTER,  # Ukrainian transliteration
+            # Future extensions can be added here:
+            # "TAB": ecodes.KEY_TAB,
+            # "ESCAPE": ecodes.KEY_ESC,
+            # "BACKSPACE": ecodes.KEY_BACKSPACE,
+        }
 
     def _is_uinput_available(self) -> bool:
         """Check if uinput is accessible."""
@@ -272,19 +288,18 @@ class TextInput:
                 # Wayland: use wl-copy with --primary flag
                 cmd = ["wl-copy", "--primary"] if primary else ["wl-copy"]
 
-                # Use Popen to fire-and-forget wl-copy (it forks to background)
-                process = subprocess.Popen(
+                # Use subprocess.run to wait for wl-copy to finish setting up
+                # wl-copy forks to background, so run() returns quickly after fork
+                result = subprocess.run(
                     cmd,
-                    stdin=subprocess.PIPE,
+                    input=text.encode('utf-8'),
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    timeout=1.0,
+                    check=False
                 )
-                process.stdin.write(text.encode('utf-8'))
-                process.stdin.close()
 
-                # Don't wait for it - wl-copy forks to background
-                # Just give it a moment to start
-                import time
+                # Give the forked process time to become selection owner
                 time.sleep(0.05)
             else:
                 # X11: use xclip with -selection flag
@@ -306,6 +321,242 @@ class TextInput:
             logger.error(f"Failed to set clipboard: {e}")
             return False
 
+    def _parse_special_commands(self, text: str) -> List[Tuple[str, str]]:
+        """Parse text for special command words and split into segments.
+
+        This method detects voice commands (like "ENTER") in the transcribed text
+        and creates a sequence of actions: either type text or press a key.
+
+        Args:
+            text: Transcribed text that may contain special command words.
+
+        Returns:
+            List of (action_type, content) tuples where:
+            - action_type is either "text" or "key"
+            - content is the text to type or the command word
+
+        Example:
+            >>> parser._parse_special_commands("submit form ENTER")
+            [("text", "submit form "), ("key", "ENTER")]
+
+            >>> parser._parse_special_commands("hello ENTER world")
+            [("text", "hello "), ("key", "ENTER"), ("text", " world")]
+
+        Implementation Notes:
+        - Uses word boundaries (\\b) to avoid matching "ENTER" within other words
+          (e.g., "CENTER" won't trigger the command)
+        - Case-insensitive matching handles variations from voice recognition
+        - Preserves spaces around commands for natural typing flow
+        """
+        if not text or not self._special_commands:
+            return [("text", text)]
+
+        # Build regex pattern for all special commands
+        # Pattern: \b(ENTER|TAB|ESCAPE)\b with word boundaries
+        # Flags: re.IGNORECASE for case-insensitive matching
+        command_words = "|".join(re.escape(cmd) for cmd in self._special_commands.keys())
+        pattern = rf'\b({command_words})\b'
+
+        segments = []
+        last_end = 0
+        prev_was_command = False
+
+        # Find all command occurrences
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            # Add text before this command (if any)
+            if match.start() > last_end:
+                text_segment = text[last_end:match.start()]
+                # Strip leading punctuation/space if previous segment was a command
+                if prev_was_command:
+                    text_segment = text_segment.lstrip(' .,;:!?')
+                if text_segment:
+                    segments.append(("text", text_segment))
+
+            # Add the command
+            # Normalize to uppercase to match dictionary keys
+            command_word = match.group(1).upper()
+            segments.append(("key", command_word))
+            prev_was_command = True
+
+            last_end = match.end()
+
+        # Add remaining text after last command (if any)
+        if last_end < len(text):
+            remaining = text[last_end:]
+            # Strip leading punctuation/space if previous segment was a command
+            if prev_was_command:
+                remaining = remaining.lstrip(' .,;:!?')
+            if remaining:
+                segments.append(("text", remaining))
+
+        # If no commands found, return original text
+        if not segments:
+            segments = [("text", text)]
+
+        logger.debug(f"Parsed command segments: {segments}")
+        return segments
+
+    async def press_key(self, keycode: int):
+        """Press and release a key using uinput.
+
+        This method emulates a physical key press: press down, wait, release.
+        Works in both uinput and clipboard modes since both use uinput keyboard.
+
+        Args:
+            keycode: Linux evdev keycode (e.g., ecodes.KEY_ENTER).
+
+        Example:
+            >>> await text_input.press_key(ecodes.KEY_ENTER)
+        """
+        if self._uinput_keyboard is None or self._uinput_keyboard._device is None:
+            logger.error("Cannot press key: uinput device not initialized")
+            return
+
+        # Press the key
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, keycode, 1)
+        self._uinput_keyboard._device.syn()
+        await asyncio.sleep(0.02)  # 20ms hold time
+
+        # Release the key
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, keycode, 0)
+        self._uinput_keyboard._device.syn()
+        await asyncio.sleep(0.02)  # 20ms after release
+
+        logger.debug(f"Pressed key: {keycode}")
+
+    def press_key_sync(self, keycode: int):
+        """Press and release a key using uinput (synchronous version).
+
+        Args:
+            keycode: Linux evdev keycode (e.g., ecodes.KEY_ENTER).
+
+        Example:
+            >>> text_input.press_key_sync(ecodes.KEY_ENTER)
+        """
+        if self._uinput_keyboard is None or self._uinput_keyboard._device is None:
+            logger.error("Cannot press key: uinput device not initialized")
+            return
+
+        # Press the key
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, keycode, 1)
+        self._uinput_keyboard._device.syn()
+        time.sleep(self.key_delay_ms / 1000.0)
+
+        # Release the key
+        self._uinput_keyboard._device.write(ecodes.EV_KEY, keycode, 0)
+        self._uinput_keyboard._device.syn()
+        time.sleep(self.key_delay_ms / 1000.0)
+
+        logger.debug(f"Pressed key: {keycode}")
+
+    async def process_and_type_with_commands(self, text: str, auto_switch_layout: bool = True) -> bool:
+        """Type text with special command recognition.
+
+        This is the main entry point for command-aware text input. It:
+        1. Parses text for special commands (like "ENTER")
+        2. Splits into segments of text and key presses
+        3. Executes each segment in order
+
+        Args:
+            text: Transcribed text that may contain special commands.
+            auto_switch_layout: Ignored (kept for API compatibility).
+
+        Returns:
+            bool: True if successful, False on error.
+
+        Example:
+            >>> # User says: "submit form ENTER"
+            >>> await text_input.process_and_type_with_commands("submit form ENTER")
+            >>> # Result: Types "submit form " then presses ENTER key
+
+        Edge Cases Handled:
+        - Multiple commands: "first ENTER second ENTER" types text then presses ENTER twice
+        - Mixed text/commands: "hello ENTER world" types "hello ", presses ENTER, types " world"
+        - No commands: "just plain text" behaves like normal type_text()
+        - Word boundaries: "did you center that" types normally (doesn't trigger ENTER)
+        """
+        if not text:
+            logger.warning("Empty text provided to process_and_type_with_commands()")
+            return True
+
+        # Parse text into command segments
+        segments = self._parse_special_commands(text)
+        logger.debug(f"Parsed {len(segments)} segments: {segments}")
+
+        try:
+            for action_type, content in segments:
+                if action_type == "text":
+                    # Type the text segment
+                    success = await self.type_text(content, auto_switch_layout)
+                    if not success:
+                        logger.warning(f"Failed to type text segment: {content[:50]}")
+                        return False
+
+                elif action_type == "key":
+                    # Press the special key
+                    if content in self._special_commands:
+                        keycode = self._special_commands[content]
+                        logger.info(f"Executing voice command: {content} -> pressing key {keycode}")
+                        # Small delay to ensure previous paste is fully processed
+                        await asyncio.sleep(0.05)
+                        await self.press_key(keycode)
+                    else:
+                        logger.warning(f"Unknown special command: {content}")
+
+            logger.info("Command-aware text input completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to process text with commands: {e}")
+            return False
+
+    def process_and_type_with_commands_sync(self, text: str, auto_switch_layout: bool = True) -> bool:
+        """Type text with special command recognition (synchronous version).
+
+        Args:
+            text: Transcribed text that may contain special commands.
+            auto_switch_layout: Ignored (kept for API compatibility).
+
+        Returns:
+            bool: True if successful, False on error.
+
+        Example:
+            >>> text_input.process_and_type_with_commands_sync("submit form ENTER")
+        """
+        if not text:
+            logger.warning("Empty text provided to process_and_type_with_commands_sync()")
+            return True
+
+        # Parse text into command segments
+        segments = self._parse_special_commands(text)
+
+        logger.debug(f"Processing {len(segments)} segments with commands (sync)")
+
+        try:
+            for action_type, content in segments:
+                if action_type == "text":
+                    # Type the text segment
+                    success = self.type_text_sync(content, auto_switch_layout)
+                    if not success:
+                        logger.warning(f"Failed to type text segment: {content[:50]}")
+                        return False
+
+                elif action_type == "key":
+                    # Press the special key
+                    if content in self._special_commands:
+                        keycode = self._special_commands[content]
+                        logger.info(f"Executing voice command: {content} -> pressing key {keycode}")
+                        self.press_key_sync(keycode)
+                    else:
+                        logger.warning(f"Unknown special command: {content}")
+
+            logger.info("Command-aware text input completed successfully (sync)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to process text with commands: {e}")
+            return False
+
     async def _type_text_clipboard(self, text: str) -> bool:
         """Type text using clipboard paste method.
 
@@ -319,34 +570,25 @@ class TextInput:
             bool: True if successful, False on error.
         """
         try:
-            # Save original PRIMARY selection (not CLIPBOARD)
-            # This avoids interfering with the user's regular clipboard (Ctrl+C/V)
-            original_primary = self._clipboard_get(primary=True)
-            if original_primary:
-                logger.debug("Saved original PRIMARY selection")
-
             # Copy text to PRIMARY selection
             if not self._clipboard_set(text, primary=True):
+                logger.error("Failed to set PRIMARY selection")
                 return False
 
-            logger.debug("Text copied to PRIMARY selection (avoiding clipboard history)")
-
-            # Small delay to ensure PRIMARY selection is ready
-            await asyncio.sleep(0.05)
+            # Delay to ensure wl-copy has registered as PRIMARY owner
+            await asyncio.sleep(0.02)
 
             # Emulate middle-click to paste from PRIMARY selection
-            # Note: Shift+Insert doesn't work on all Wayland compositors with PRIMARY
             await self._emulate_middle_click()
 
             logger.info("Text pasted successfully via PRIMARY selection (middle-click)")
 
             # Wait for paste to complete
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.02)
 
-            # Restore original PRIMARY selection
-            if original_primary:
-                self._clipboard_set(original_primary.decode('utf-8', errors='replace'), primary=True)
-                logger.debug("Restored original PRIMARY selection")
+            # Note: We don't restore original PRIMARY because it interferes with
+            # multi-segment pastes (e.g., "text ENTER more text")
+            # The small pollution of PRIMARY is acceptable trade-off
 
             return True
 
