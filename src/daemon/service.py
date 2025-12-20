@@ -7,6 +7,7 @@ import os
 from typing import Optional
 
 from .hotkey_listener import HotkeyListener
+from .multi_hotkey_listener import MultiHotkeyListener
 from .state_machine import StateMachine, State
 from ..core.transcriber import Transcriber
 from ..core.recorder import AudioRecorder
@@ -247,25 +248,49 @@ class SpeechToTextService:
             logger.error(f"Failed to load model: {e}")
             return
 
-        # Set up hotkey listener
-        self.listener = HotkeyListener(
-            key_code=self.config.hotkey.key_code,
-            device_path=self.config.hotkey.device_path or None,
-            on_press=self._on_key_press,
-            on_release=self._on_key_release,
-            enable_double_tap=self.config.hotkey.enable_double_tap,
-            double_tap_timeout_ms=self.config.hotkey.double_tap_timeout_ms,
-        )
+        # Set up hotkey listener (multi-device support for keyboard + mouse)
+        trigger_keys = self.config.hotkey.trigger_keys
+        double_tap_keys = self.config.hotkey.double_tap_key_list
+
+        if len(trigger_keys) > 1:
+            # Use multi-device listener for multiple triggers
+            self.listener = MultiHotkeyListener(
+                trigger_keys=trigger_keys,
+                double_tap_keys=double_tap_keys,
+                on_press=self._on_key_press,
+                on_release=self._on_key_release,
+                double_tap_timeout_ms=self.config.hotkey.double_tap_timeout_ms,
+            )
+        else:
+            # Use single-device listener for backward compatibility
+            self.listener = HotkeyListener(
+                key_code=self.config.hotkey.key_code,
+                device_path=self.config.hotkey.device_path or None,
+                on_press=self._on_key_press,
+                on_release=self._on_key_release,
+                enable_double_tap=self.config.hotkey.enable_double_tap,
+                double_tap_timeout_ms=self.config.hotkey.double_tap_timeout_ms,
+            )
 
         # Set up signal handlers
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self._handle_signal)
 
-        if self.config.hotkey.enable_double_tap:
-            logger.info(f"Service ready. Double-tap {self.config.hotkey.trigger_key} and hold to record.")
+        # Build user-friendly message
+        if double_tap_keys:
+            double_tap_desc = " or ".join(double_tap_keys)
+            single_tap_keys = [k for k in trigger_keys if k not in double_tap_keys]
+            if single_tap_keys:
+                single_tap_desc = " or ".join(single_tap_keys)
+                logger.info(f"Service ready.")
+                logger.info(f"  - Double-tap {double_tap_desc} and hold to record")
+                logger.info(f"  - Hold {single_tap_desc} to record")
+            else:
+                logger.info(f"Service ready. Double-tap {double_tap_desc} and hold to record.")
         else:
-            logger.info(f"Service ready. Hold {self.config.hotkey.trigger_key} to record.")
+            trigger_desc = " or ".join(trigger_keys)
+            logger.info(f"Service ready. Hold {trigger_desc} to record.")
 
         try:
             await self.listener.start()

@@ -4,8 +4,9 @@ Offline speech-to-text dictation system for Ubuntu 24.04 with hold-to-talk suppo
 
 ## Features
 
-- **Hold-to-talk recording** - Hold a configurable hotkey (default Right Ctrl) to record, release to transcribe
-- **Double-tap mode** - Optional double-tap activation prevents conflicts with Ctrl shortcuts (Ctrl+Insert, Ctrl+C, Ctrl+V)
+- **Hold-to-talk recording** - Hold a configurable hotkey (keyboard or mouse button) to record, release to transcribe
+- **Multi-device support** - Use both keyboard keys AND mouse buttons simultaneously as triggers
+- **Per-key double-tap mode** - Different behavior for each trigger (e.g., double-tap keyboard, single-click mouse)
 - **Offline transcription** - Uses Whisper model locally (no internet required)
 - **Multi-language support** - Auto-detects language (Ukrainian, English, etc.)
 - **Mixed-language dictation** - Handles "Він сказав hello world" perfectly with clipboard mode
@@ -130,10 +131,16 @@ compute_type = "int8"       # int8, float16, float32
 language = ""               # Empty for auto-detect, or "en", "uk"
 
 [hotkey]
-trigger_key = "KEY_RIGHTCTRL"
-device_path = ""                # Empty for auto-detect
-enable_double_tap = false       # Prevent conflicts with Ctrl shortcuts (see below)
-double_tap_timeout_ms = 300     # Max time between taps (when double-tap enabled)
+# Single trigger (keyboard or mouse):
+trigger_key = "KEY_RIGHTCTRL"              # Or "BTN_FORWARD", "BTN_BACK", etc.
+
+# Multiple triggers (keyboard + mouse):
+# trigger_key = "KEY_RIGHTCTRL, BTN_FORWARD"  # Both keyboard AND mouse
+
+device_path = ""                           # Empty for auto-detect
+double_tap_keys = ""                       # Keys requiring double-tap (e.g., "KEY_RIGHTCTRL")
+enable_double_tap = false                  # Legacy: applies to all keys if double_tap_keys is empty
+double_tap_timeout_ms = 300                # Max time between taps
 
 [feedback]
 enabled = true
@@ -168,21 +175,71 @@ key_delay_ms = 10                  # Delay between key events (uinput mode)
 mode = "clipboard"
 ```
 
+### Using Mouse Buttons
+
+You can use mouse buttons as triggers, either alone or combined with keyboard keys.
+
+**Common mouse button options:**
+- `BTN_FORWARD` - Forward navigation button (side button)
+- `BTN_BACK` - Back navigation button (side button)
+- `BTN_SIDE` / `BTN_EXTRA` - Additional side buttons
+- `BTN_MIDDLE` - Middle mouse button (scroll wheel click)
+
+**Example 1: Mouse button only**
+```toml
+[hotkey]
+trigger_key = "BTN_FORWARD"
+```
+Simple and convenient - just hold the button and speak!
+
+**Example 2: Keyboard + Mouse (Recommended)**
+```toml
+[hotkey]
+trigger_key = "KEY_RIGHTCTRL, BTN_FORWARD"  # Both keyboard AND mouse
+double_tap_keys = "KEY_RIGHTCTRL"           # Only keyboard requires double-tap
+```
+
+This gives you the best of both worlds:
+- **Mouse button:** Simple hold-to-talk (no double-tap needed)
+- **Keyboard:** Double-tap to avoid conflicts with Ctrl shortcuts
+- Use whichever is more convenient at the time!
+
+**Finding your mouse button code:**
+
+Run the included script to identify your mouse button:
+```bash
+source ~/speech-env/bin/activate
+python3 find_mouse_button.py
+```
+
+Select your mouse, press the button you want to use, and note the code shown (e.g., `BTN_FORWARD`, `BTN_EXTRA`).
+
 ### Double-Tap Mode
 
 **Problem:** If you use Ctrl shortcuts frequently (Ctrl+Insert, Ctrl+C, Ctrl+V, Ctrl+Arrow, etc.), a single Right Ctrl press/hold triggers dictation and prevents these shortcuts from working.
 
-**Solution:** Enable **double-tap mode** - requires double-tapping the hotkey to activate dictation:
+**Solution 1: Per-key double-tap (Recommended)**
+
+Use double-tap for keyboard, single-tap for mouse:
+
+```toml
+[hotkey]
+trigger_key = "KEY_RIGHTCTRL, BTN_FORWARD"
+double_tap_keys = "KEY_RIGHTCTRL"    # Only keyboard requires double-tap
+double_tap_timeout_ms = 300
+```
+
+**Solution 2: Double-tap for all keys**
 
 ```toml
 [hotkey]
 trigger_key = "KEY_RIGHTCTRL"
-enable_double_tap = true        # Enable double-tap mode
+enable_double_tap = true        # Enable double-tap mode for all keys
 double_tap_timeout_ms = 300     # 300ms window between taps
 ```
 
-**How it works:**
-1. **Single tap** → Normal Ctrl behavior (Ctrl+Insert, Ctrl+C, etc. work normally)
+**How double-tap works:**
+1. **Single tap** → Normal key behavior (Ctrl+Insert, Ctrl+C, etc. work normally)
 2. **Double-tap quickly** → Arms the listener
 3. **Hold on second tap** → Starts recording
 4. **Release** → Transcribes and types

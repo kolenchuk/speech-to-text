@@ -49,23 +49,39 @@ min_duration = 0.5
 max_duration = 60
 
 [hotkey]
-# Key to hold for recording
-# Common options: KEY_SCROLLLOCK (safe), KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT
+# Key(s) to hold for recording
+# Can be a single key OR multiple keys separated by commas (for keyboard + mouse support)
+# Common keyboard options: KEY_SCROLLLOCK (safe), KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT
+# Common mouse options: BTN_FORWARD, BTN_BACK, BTN_SIDE, BTN_EXTRA
+# Examples:
+#   trigger_key = "KEY_RIGHTCTRL"                    # Keyboard only
+#   trigger_key = "BTN_FORWARD"                      # Mouse only
+#   trigger_key = "KEY_RIGHTCTRL, BTN_FORWARD"       # Both keyboard AND mouse
 trigger_key = "KEY_RIGHTCTRL"
 
 # Input device path (empty for auto-detect)
+# Note: When using multiple trigger keys, devices are auto-detected
 # Example: /dev/input/event4
 device_path = ""
 
-# Double-tap mode: Require double-tap to activate (prevents conflicts with key combinations)
+# Per-key double-tap mode: Specify which keys require double-tap
+# This allows different behavior for keyboard vs mouse buttons
+# - Empty string: No keys require double-tap (use enable_double_tap instead for all keys)
+# - Comma-separated list: Only these specific keys require double-tap
+# Examples:
+#   double_tap_keys = ""                            # No double-tap (all keys are single-tap)
+#   double_tap_keys = "KEY_RIGHTCTRL"               # Only keyboard requires double-tap
+#   double_tap_keys = "KEY_RIGHTCTRL, KEY_LEFTCTRL" # Both Ctrl keys require double-tap
+# Recommended: "KEY_RIGHTCTRL" when using keyboard + mouse (prevents Ctrl+C conflicts)
+double_tap_keys = ""
+
+# Legacy double-tap mode (applies to ALL trigger keys if double_tap_keys is empty)
 # - false: Single press/hold activates recording (CONFLICT: can't use Ctrl+Insert, Ctrl+C, etc.)
-# - true: Must double-tap the key, then hold on second tap to record
-#   * Allows normal use of Ctrl+Insert, Ctrl+C, Ctrl+V, etc.
-#   * Similar to macOS dictation (Fn double-tap)
-#   * RECOMMENDED if you use Ctrl combinations frequently
+# - true: Must double-tap ALL keys, then hold on second tap to record
+# NOTE: Use double_tap_keys for per-key control instead
 enable_double_tap = false
 
-# Maximum time between taps in milliseconds (only used when enable_double_tap = true)
+# Maximum time between taps in milliseconds (for double-tap detection)
 # - Lower value (200ms): Faster tapping required, less chance of accidental trigger
 # - Higher value (400ms): Easier to trigger, but might catch accidental double-presses
 # - Recommended: 300ms (balanced)

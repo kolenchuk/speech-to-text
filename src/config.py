@@ -107,16 +107,39 @@ class AudioConfig:
 @dataclass
 class HotkeyConfig:
     """Hotkey configuration."""
-    trigger_key: str = "KEY_RIGHTCTRL"
+    trigger_key: str = "KEY_RIGHTCTRL"  # Can be a single key or comma-separated list
     device_path: str = ""  # Empty for auto-detect
     enable_double_tap: bool = False  # Require double-tap to activate (prevents conflicts with Ctrl combinations)
+    double_tap_keys: str = ""  # Comma-separated list of keys that require double-tap (empty = use enable_double_tap for all)
     double_tap_timeout_ms: int = 300  # Max time between taps in milliseconds
 
     @property
+    def trigger_keys(self) -> list:
+        """Get list of trigger key names."""
+        if isinstance(self.trigger_key, str):
+            # Support comma-separated list
+            return [k.strip() for k in self.trigger_key.split(',')]
+        return [self.trigger_key]
+
+    @property
+    def double_tap_key_list(self) -> list:
+        """Get list of keys that require double-tap."""
+        if self.double_tap_keys:
+            # Specific keys listed
+            return [k.strip() for k in self.double_tap_keys.split(',')]
+        elif self.enable_double_tap:
+            # All keys require double-tap
+            return self.trigger_keys
+        else:
+            # No keys require double-tap
+            return []
+
+    @property
     def key_code(self) -> int:
-        """Get evdev key code for trigger key."""
+        """Get evdev key code for trigger key (first one if multiple)."""
         from evdev import ecodes
-        return getattr(ecodes, self.trigger_key, 97)  # 97 = KEY_RIGHTCTRL
+        first_key = self.trigger_keys[0]
+        return getattr(ecodes, first_key, 97)  # 97 = KEY_RIGHTCTRL
 
 
 @dataclass
@@ -233,6 +256,7 @@ class Config:
                 trigger_key=h.get("trigger_key", config.hotkey.trigger_key),
                 device_path=h.get("device_path", config.hotkey.device_path),
                 enable_double_tap=h.get("enable_double_tap", config.hotkey.enable_double_tap),
+                double_tap_keys=h.get("double_tap_keys", config.hotkey.double_tap_keys),
                 double_tap_timeout_ms=h.get("double_tap_timeout_ms", config.hotkey.double_tap_timeout_ms),
             )
 
