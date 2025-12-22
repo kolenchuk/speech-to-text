@@ -49,29 +49,102 @@ echo "╔═══════════════════════�
 echo "║      Speech-to-Text Post-Installation Setup             ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
+
+# Show build info to verify package version
+if [ -f "/opt/speech-to-text/BUILD_INFO" ]; then
+    print_step "Package Build Information:"
+    cat /opt/speech-to-text/BUILD_INFO | sed 's/^/  /'
+    echo ""
+fi
+
 print_step "Installing for user: $ACTUAL_USER"
 
-# Ask user for model size
-echo ""
-print_step "Select Whisper model size"
-echo ""
-echo "  1) tiny   [39 MB,  fastest, lower accuracy]"
-echo "  2) base   [140 MB, fast, good accuracy]"
-echo "  3) small  [460 MB, recommended for multilingual] (RECOMMENDED)"
-echo "  4) medium [1.5 GB, slow, high accuracy]"
-echo "  5) large  [3+ GB,  slowest, best accuracy]"
-echo ""
-read -p "Choice [3]: " MODEL_CHOICE
+# Ask user for model size (or use default in non-interactive mode)
+MODEL="${WHISPER_MODEL:-small}"  # Can be overridden with WHISPER_MODEL env var
 
-case "$MODEL_CHOICE" in
-    1) MODEL="tiny" ;;
-    2) MODEL="base" ;;
-    4) MODEL="medium" ;;
-    5) MODEL="large" ;;
-    *) MODEL="small" ;;  # Default
-esac
+# Check if running interactively
+if [ -t 0 ]; then
+    # Interactive mode - prompt user
+    echo ""
+    print_step "Select Whisper model size"
+    echo ""
+    echo "  1) tiny   [39 MB,  fastest, lower accuracy]"
+    echo "  2) base   [140 MB, fast, good accuracy]"
+    echo "  3) small  [460 MB, recommended for multilingual] (RECOMMENDED)"
+    echo "  4) medium [1.5 GB, slow, high accuracy]"
+    echo "  5) large  [3+ GB,  slowest, best accuracy]"
+    echo ""
+    read -p "Choice [3]: " MODEL_CHOICE
 
-print_success "Selected model: $MODEL"
+    case "$MODEL_CHOICE" in
+        1) MODEL="tiny" ;;
+        2) MODEL="base" ;;
+        4) MODEL="medium" ;;
+        5) MODEL="large" ;;
+        *) MODEL="small" ;;  # Default
+    esac
+    print_success "Selected model: $MODEL"
+else
+    # Non-interactive mode - use default
+    print_step "Non-interactive mode detected"
+    print_success "Using default model: $MODEL (set WHISPER_MODEL env var to override)"
+fi
+
+# Auto-install missing dependencies
+print_step "Checking and installing dependencies"
+MISSING_PACKAGES=""
+
+# Check for venv
+if ! python3 -m venv --help &>/dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES python3-venv"
+fi
+
+# Check for pip
+if ! python3 -m pip --version &>/dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES python3-pip"
+fi
+
+# Check for clipboard tools - try to install appropriate one for the system
+# Note: We check if either xclip or wl-clipboard is available
+# If neither is installed, we try to install xclip (works on both X11 and is more common)
+if ! command -v xclip &>/dev/null && ! command -v wl-copy &>/dev/null; then
+    # Try xclip first (more universally available)
+    MISSING_PACKAGES="$MISSING_PACKAGES xclip"
+fi
+
+# Install missing packages if any
+if [ -n "$MISSING_PACKAGES" ]; then
+    print_step "Installing missing packages:$MISSING_PACKAGES"
+
+    # Set non-interactive mode for apt
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Try to install
+    echo "Running: apt-get update && apt-get install -y $MISSING_PACKAGES"
+    if apt-get update -qq && apt-get install -y -qq $MISSING_PACKAGES; then
+        print_success "Dependencies installed successfully"
+    else
+        print_warning "Could not auto-install some packages. Trying with universe repository..."
+
+        # Try enabling universe and installing again
+        echo "Running: add-apt-repository -y universe"
+        if add-apt-repository -y universe && \
+           apt-get update -qq && \
+           apt-get install -y -qq $MISSING_PACKAGES; then
+            print_success "Dependencies installed successfully (universe repo enabled)"
+        else
+            print_error "Failed to install dependencies automatically!"
+            echo ""
+            echo "Please install manually:"
+            echo "  sudo add-apt-repository universe"
+            echo "  sudo apt update"
+            echo "  sudo apt install $MISSING_PACKAGES"
+            exit 1
+        fi
+    fi
+else
+    print_success "All dependencies already installed"
+fi
 
 # Create Python virtual environment
 print_step "Creating Python virtual environment"
@@ -85,6 +158,11 @@ fi
 
 # Install Python packages
 print_step "Installing Python packages"
+# Upgrade pip if possible, or use ensurepip
+if ! "$VENV_PATH/bin/pip" --version &>/dev/null; then
+    print_warning "pip not found in venv, bootstrapping with ensurepip..."
+    "$VENV_PATH/bin/python3" -m ensurepip --upgrade
+fi
 "$VENV_PATH/bin/pip" install --upgrade pip
 "$VENV_PATH/bin/pip" install faster-whisper evdev numpy soundfile
 print_success "Python packages installed"

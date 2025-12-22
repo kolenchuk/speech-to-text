@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 PACKAGE_NAME="speech-to-text"
 VERSION="1.0"
 ARCH="amd64"
+BUILD_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 BUILD_DIR="debian/${PACKAGE_NAME}"
 DEB_FILE="${PACKAGE_NAME}_${VERSION}_${ARCH}.deb"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -70,6 +71,17 @@ cp "$PROJECT_DIR/run.sh" "${BUILD_DIR}/opt/speech-to-text/"
 cp "$PROJECT_DIR/config.example.toml" "${BUILD_DIR}/opt/speech-to-text/"
 cp "$PROJECT_DIR/README.md" "${BUILD_DIR}/opt/speech-to-text/"
 cp "$PROJECT_DIR/CHANGELOG.md" "${BUILD_DIR}/opt/speech-to-text/" 2>/dev/null || true
+
+# Create build info file
+cat > "${BUILD_DIR}/opt/speech-to-text/BUILD_INFO" << EOF
+Package: ${PACKAGE_NAME}
+Version: ${VERSION}
+Architecture: ${ARCH}
+Built: ${BUILD_TIMESTAMP}
+Built-By: $(whoami)@$(hostname)
+Git-Commit: $(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+EOF
+
 print_success "Application files copied"
 
 # Copy systemd service
@@ -90,12 +102,15 @@ Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: ${ARCH}
-Depends: alsa-utils, python3 (>= 3.10), python3-venv, python3-pip
-Recommends: wl-clipboard, xclip
+Depends: alsa-utils, python3 (>= 3.10)
+Suggests: python3-venv, python3-pip, wl-clipboard, xclip
 Maintainer: Speech-to-Text Project <noreply@example.com>
 Description: Offline speech-to-text dictation for Ubuntu
  Hold-to-talk offline speech recognition using Faster Whisper.
  Works on both X11 and Wayland with support for multilingual dictation.
+ .
+ Build: ${BUILD_TIMESTAMP}
+ Git: $(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
  .
  Features:
   - Offline transcription using Whisper models
@@ -161,12 +176,19 @@ echo "╚═══════════════════════�
 echo ""
 print_success "Debian package created: $DEB_FILE"
 echo ""
+echo "Build Information:"
+echo "  Version: $VERSION"
+echo "  Built: $BUILD_TIMESTAMP"
+echo "  Git Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+echo "  Package size: $(du -h "$DEB_FILE" | cut -f1)"
+echo ""
 echo "To install:"
 echo "  sudo apt install ./$DEB_FILE"
+echo ""
+echo "To verify before copying:"
+echo "  dpkg-deb --info $DEB_FILE | grep Build"
 echo ""
 echo "To inspect:"
 echo "  dpkg-deb --contents $DEB_FILE"
 echo "  dpkg-deb --info $DEB_FILE"
-echo ""
-echo "Package size: $(du -h "$DEB_FILE" | cut -f1)"
 echo ""
