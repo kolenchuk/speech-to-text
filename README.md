@@ -66,7 +66,59 @@ Hold the configured hotkey (default **Right Ctrl**) to record, release to transc
 
 ## Installation
 
-### Prerequisites
+### Method 1: .deb Package (Recommended)
+
+The easiest way to install on Ubuntu/Debian systems:
+
+```bash
+# Download the .deb package (or build it locally with ./build-deb.sh)
+sudo apt install ./speech-to-text_1.0_amd64.deb
+```
+
+The package will:
+- ✅ Install all dependencies (alsa-utils, python3, python3-venv, python3-pip)
+- ✅ Recommend optional packages (wl-clipboard for Wayland, xclip for X11)
+- ✅ Create Python virtual environment at `/opt/speech-to-text/venv`
+- ✅ Install Python packages (faster-whisper, evdev, etc.)
+- ✅ Add you to the 'input' group automatically
+- ✅ Configure systemd service
+- ✅ Let you choose Whisper model size during installation
+
+**After installation:**
+1. **Logout and login** (required for 'input' group membership)
+2. Service starts automatically on next login
+3. Hold Right Ctrl to record speech
+
+**Optional packages:**
+- For **Wayland clipboard mode**: `sudo apt install wl-clipboard`
+- For **X11 clipboard mode**: `sudo apt install xclip`
+- These are automatically installed if available, but not required for basic operation
+
+**Configuration:** `~/.config/speech-to-text/config.toml`
+
+**Control service:**
+```bash
+systemctl --user status speech-to-text   # Check status
+systemctl --user stop speech-to-text     # Stop service
+systemctl --user restart speech-to-text  # Restart after config changes
+journalctl --user -u speech-to-text -f   # View logs
+```
+
+**Building the package yourself:**
+```bash
+# Build .deb package from source
+./build-deb.sh
+
+# This creates: speech-to-text_1.0_amd64.deb
+# Then install it:
+sudo apt install ./speech-to-text_1.0_amd64.deb
+```
+
+### Method 2: Manual Installation (Development)
+
+For development or custom setups:
+
+#### Prerequisites
 
 **For both X11 and Wayland:**
 ```bash

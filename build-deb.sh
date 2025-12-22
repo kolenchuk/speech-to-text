@@ -90,7 +90,8 @@ Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: ${ARCH}
-Depends: alsa-utils, wl-clipboard, xclip, python3 (>= 3.10), python3-venv, python3-pip
+Depends: alsa-utils, python3 (>= 3.10), python3-venv, python3-pip
+Recommends: wl-clipboard, xclip
 Maintainer: Speech-to-Text Project <noreply@example.com>
 Description: Offline speech-to-text dictation for Ubuntu
  Hold-to-talk offline speech recognition using Faster Whisper.
@@ -100,9 +101,13 @@ Description: Offline speech-to-text dictation for Ubuntu
   - Offline transcription using Whisper models
   - Multi-language support (Ukrainian, English, 99+ languages)
   - Mixed-script text support (clipboard mode)
-  - Works on X11 and Wayland
+  - Works on X11 and Wayland (requires wl-clipboard for Wayland, xclip for X11)
   - Systemd user service integration
   - Configurable hotkeys and audio feedback
+ .
+ Recommended packages:
+  - wl-clipboard: Required for clipboard mode on Wayland
+  - xclip: Required for clipboard mode on X11
 EOF
 print_success "Control file created"
 
