@@ -177,6 +177,7 @@ class TextInputConfig:
     mode: str = "uinput"  # Input mode: "uinput" or "clipboard"
     paste_key_combination: str = "shift+insert"  # Paste key for clipboard mode
     key_delay_ms: int = 10  # Delay between key events in milliseconds (uinput mode)
+    pre_paste_delay_ms: int = 0  # Delay before pasting (gives time to restore window focus)
 
 
 @dataclass
@@ -288,6 +289,7 @@ class Config:
                 mode=ti.get("mode", config.text_input.mode),
                 paste_key_combination=ti.get("paste_key_combination", config.text_input.paste_key_combination),
                 key_delay_ms=ti.get("key_delay_ms", config.text_input.key_delay_ms),
+                pre_paste_delay_ms=ti.get("pre_paste_delay_ms", config.text_input.pre_paste_delay_ms),
             )
 
         return config

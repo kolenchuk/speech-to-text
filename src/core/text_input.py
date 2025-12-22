@@ -53,7 +53,8 @@ class TextInput:
         display_server: Optional[str] = None,
         key_delay_ms: int = 10,
         mode: str = "uinput",
-        paste_key_combination: str = "shift+insert"
+        paste_key_combination: str = "shift+insert",
+        pre_paste_delay_ms: int = 0
     ):
         """Initialize text input handler.
 
@@ -62,6 +63,7 @@ class TextInput:
             key_delay_ms: Delay between key events in milliseconds.
             mode: Input mode - "uinput" or "clipboard".
             paste_key_combination: Key combination for clipboard paste (e.g., "shift+insert").
+            pre_paste_delay_ms: Delay before pasting (gives time to restore window focus).
 
         Raises:
             RuntimeError: If uinput is not accessible.
@@ -70,6 +72,7 @@ class TextInput:
         self.key_delay_ms = key_delay_ms
         self.mode = mode.lower()
         self.paste_key_combination = paste_key_combination
+        self.pre_paste_delay_ms = pre_paste_delay_ms
         self._uinput_keyboard: Optional[UInputKeyboard] = None
         self.tool = f"python-uinput ({self.mode} mode)"
 
@@ -252,20 +255,28 @@ class TextInput:
             Clipboard contents as bytes, or empty bytes if clipboard is empty/unavailable.
         """
         try:
+            selection = "primary" if primary else "clipboard"
             if self.display_server == "wayland":
                 # Wayland: use wl-paste with --primary flag
                 cmd = ["wl-paste", "--primary"] if primary else ["wl-paste"]
             else:
                 # X11: use xclip with -selection flag
-                selection = "primary" if primary else "clipboard"
                 cmd = ["xclip", "-selection", selection, "-o"]
 
+            logger.debug(f"Reading {selection} selection with: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 timeout=1.0,
                 check=False
             )
+
+            if result.returncode != 0:
+                logger.debug(f"xclip read failed with exit code {result.returncode}")
+                if result.stderr:
+                    stderr_text = result.stderr.decode('utf-8', errors='replace')
+                    logger.debug(f"xclip read stderr: {stderr_text}")
+
             return result.stdout if result.returncode == 0 else b""
         except Exception as e:
             logger.debug(f"Could not read clipboard: {e}")
@@ -286,35 +297,94 @@ class TextInput:
             # Most clipboard managers only track CLIPBOARD, not PRIMARY
             if self.display_server == "wayland":
                 # Wayland: use wl-copy with --primary flag
+                selection = "primary" if primary else "clipboard"
                 cmd = ["wl-copy", "--primary"] if primary else ["wl-copy"]
 
-                # Use subprocess.run to wait for wl-copy to finish setting up
-                # wl-copy forks to background, so run() returns quickly after fork
-                result = subprocess.run(
-                    cmd,
-                    input=text.encode('utf-8'),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=1.0,
-                    check=False
-                )
+                # Log Wayland environment for debugging
+                wayland_display = os.environ.get('WAYLAND_DISPLAY', 'NOT SET')
+                xdg_runtime = os.environ.get('XDG_RUNTIME_DIR', 'NOT SET')
+                logger.info(f"Wayland environment: WAYLAND_DISPLAY={wayland_display}, XDG_RUNTIME_DIR={xdg_runtime}")
 
-                # Give the forked process time to become selection owner
-                time.sleep(0.05)
+                try:
+                    # Spawn wl-copy and send to background (don't wait for it)
+                    # wl-copy needs to stay running to maintain selection ownership
+                    logger.info(f"Spawning wl-copy for {selection} selection: {' '.join(cmd)}")
+                    proc = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True  # Detach from parent process group
+                    )
+
+                    # Write data to stdin and close (non-blocking)
+                    try:
+                        proc.stdin.write(text.encode('utf-8'))
+                        proc.stdin.close()
+                    except Exception as e:
+                        logger.error(f"Failed to write to wl-copy stdin: {e}")
+                        proc.kill()
+                        return False
+
+                    # Don't wait or poll on Wayland; wl-copy ownership timing varies
+                    logger.info(f"wl-copy spawned for {selection} selection (PID: {proc.pid})")
+
+                except Exception as e:
+                    logger.error(f"wl-copy error: {e}")
+                    return False
             else:
                 # X11: use xclip with -selection flag
                 selection = "primary" if primary else "clipboard"
+
+                # Log X11 environment for debugging
+                display = os.environ.get('DISPLAY', 'NOT SET')
+                xauth = os.environ.get('XAUTHORITY', 'NOT SET')
+                logger.info(f"X11 environment: DISPLAY={display}, XAUTHORITY={xauth}")
+
+                # Quick test: can we run xclip at all?
+                try:
+                    test_result = subprocess.run(
+                        ["xclip", "-version"],
+                        capture_output=True,
+                        timeout=0.5,
+                        check=False
+                    )
+                    logger.debug(f"xclip -version returned: {test_result.returncode}")
+                except Exception as e:
+                    logger.warning(f"xclip -version test failed: {e}")
+
+                # Use xclip to set selection
+                # Use Popen and don't wait - like running "echo text | xclip &" in bash
                 cmd = ["xclip", "-selection", selection, "-i"]
 
-                # xclip waits for input on stdin
-                result = subprocess.run(
-                    cmd,
-                    input=text.encode('utf-8'),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=1.0,
-                    check=True
-                )
+                try:
+                    # Spawn xclip and send to background (don't wait for it)
+                    proc = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True  # Detach from parent process group
+                    )
+
+                    # Write data to stdin and close (non-blocking)
+                    try:
+                        proc.stdin.write(text.encode('utf-8'))
+                        proc.stdin.flush()
+                        proc.stdin.close()
+                    except Exception as e:
+                        logger.error(f"Failed to write to xclip stdin: {e}")
+                        proc.kill()
+                        return False
+
+                    # Give xclip time to fork and become selection owner
+                    # Don't wait for process to exit - it's running in background
+                    time.sleep(0.15)
+                    logger.debug(f"xclip spawned for {selection} selection (PID may have changed after fork)")
+
+                except Exception as e:
+                    logger.error(f"xclip error: {e}")
+                    return False
 
             return True
         except Exception as e:
@@ -570,30 +640,113 @@ class TextInput:
             bool: True if successful, False on error.
         """
         try:
+            logger.debug(f"Setting PRIMARY selection to: {repr(text[:100])}...")
+
             # Copy text to PRIMARY selection
-            if not self._clipboard_set(text, primary=True):
-                logger.error("Failed to set PRIMARY selection")
+            if self._clipboard_set(text, primary=True):
+                # Wayland primary readback can be unreliable with wl-copy ownership;
+                # skip verification and paste immediately.
+                if self.display_server == "wayland":
+                    await asyncio.sleep(0.05)
+
+                    # Pre-paste delay: gives user time to restore window focus
+                    if self.pre_paste_delay_ms > 0:
+                        logger.info(f"Waiting {self.pre_paste_delay_ms}ms before pasting (gives time to restore focus)...")
+                        await asyncio.sleep(self.pre_paste_delay_ms / 1000.0)
+
+                    await self._emulate_middle_click()
+                    logger.info("Text pasted successfully via PRIMARY selection (middle-click)")
+                    await asyncio.sleep(0.05)
+                    return True
+
+                # Delay to ensure clipboard tool has registered as PRIMARY owner
+                # X11 xclip needs time to become selection owner
+                await asyncio.sleep(0.2)
+
+                # Verify PRIMARY was set correctly
+                readback = self._clipboard_get(primary=True).decode('utf-8', errors='replace')
+                if readback != text:
+                    logger.warning("PRIMARY verification failed!")
+                    logger.warning(f"Expected: {repr(text[:100])}")
+                    logger.warning(f"Got: {repr(readback[:100])}")
+                    logger.warning("Retrying with longer delay...")
+
+                    # Retry with longer delay
+                    await asyncio.sleep(0.15)
+                    readback = self._clipboard_get(primary=True).decode('utf-8', errors='replace')
+
+                if readback == text:
+                    logger.debug("PRIMARY verified successfully")
+
+                    # Give applications time to register the PRIMARY selection change
+                    # Some apps (terminals, etc.) need time to notice the selection changed
+                    await asyncio.sleep(0.1)
+
+                    # Pre-paste delay: gives user time to restore window focus
+                    if self.pre_paste_delay_ms > 0:
+                        logger.info(f"Waiting {self.pre_paste_delay_ms}ms before pasting (gives time to restore focus)...")
+                        await asyncio.sleep(self.pre_paste_delay_ms / 1000.0)
+
+                    # Emulate middle-click to paste from PRIMARY selection
+                    await self._emulate_middle_click()
+
+                    logger.info("Text pasted successfully via PRIMARY selection (middle-click)")
+                    await asyncio.sleep(0.05)
+                    return True
+
+                logger.warning("PRIMARY still incorrect after retry - falling back to CLIPBOARD")
+            else:
+                logger.warning("Failed to set PRIMARY selection - falling back to CLIPBOARD")
+
+            # Fallback to CLIPBOARD selection + paste key combination
+            logger.debug(f"Setting CLIPBOARD selection to: {repr(text[:100])}...")
+            if not self._clipboard_set(text, primary=False):
+                logger.error("Failed to set CLIPBOARD selection")
                 return False
 
-            # Delay to ensure wl-copy has registered as PRIMARY owner
-            await asyncio.sleep(0.02)
+            if self.display_server != "wayland":
+                await asyncio.sleep(0.2)
+                readback = self._clipboard_get(primary=False).decode('utf-8', errors='replace')
+                if readback != text:
+                    logger.warning("CLIPBOARD verification failed!")
+                    logger.warning(f"Expected: {repr(text[:100])}")
+                    logger.warning(f"Got: {repr(readback[:100])}")
+                    logger.warning("Retrying with longer delay...")
+                    await asyncio.sleep(0.15)
+                    readback = self._clipboard_get(primary=False).decode('utf-8', errors='replace')
+                    if readback != text:
+                        logger.error("CLIPBOARD still incorrect after retry - falling back to uinput typing")
+                        return await self._type_text_uinput_fallback(text)
+                logger.debug("CLIPBOARD verified successfully")
 
-            # Emulate middle-click to paste from PRIMARY selection
-            await self._emulate_middle_click()
+            await asyncio.sleep(0.1)
 
-            logger.info("Text pasted successfully via PRIMARY selection (middle-click)")
+            # Pre-paste delay: gives user time to restore window focus
+            if self.pre_paste_delay_ms > 0:
+                logger.info(f"Waiting {self.pre_paste_delay_ms}ms before pasting (gives time to restore focus)...")
+                await asyncio.sleep(self.pre_paste_delay_ms / 1000.0)
 
-            # Wait for paste to complete
-            await asyncio.sleep(0.02)
-
-            # Note: We don't restore original PRIMARY because it interferes with
-            # multi-segment pastes (e.g., "text ENTER more text")
-            # The small pollution of PRIMARY is acceptable trade-off
-
+            # Use paste key combination for CLIPBOARD
+            await self._emulate_paste_key()
+            logger.info("Text pasted successfully via CLIPBOARD (paste key)")
+            await asyncio.sleep(0.05)
             return True
 
         except Exception as e:
             logger.error(f"Failed to type text via clipboard: {e}")
+            return await self._type_text_uinput_fallback(text)
+
+    async def _type_text_uinput_fallback(self, text: str) -> bool:
+        if self._uinput_keyboard is None:
+            logger.error("Cannot fall back to uinput typing: uinput device not initialized")
+            return False
+
+        try:
+            await self._uinput_keyboard.type_text(text)
+            logger.info("Text typed successfully via uinput fallback")
+            return True
+        except Exception as e:
+            logger.error(f"Uinput fallback typing failed: {e}")
             return False
 
     async def type_text(self, text: str, auto_switch_layout: bool = True) -> bool:

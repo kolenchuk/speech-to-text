@@ -76,13 +76,13 @@ sudo apt install ./speech-to-text_1.0_amd64.deb
 ```
 
 The package will:
-- ✅ Install all dependencies (alsa-utils, python3, python3-venv, python3-pip)
-- ✅ Recommend optional packages (wl-clipboard for Wayland, xclip for X11)
-- ✅ Create Python virtual environment at `/opt/speech-to-text/venv`
-- ✅ Install Python packages (faster-whisper, evdev, etc.)
-- ✅ Add you to the 'input' group automatically
-- ✅ Configure systemd service
-- ✅ Let you choose Whisper model size during installation
+- Install all dependencies (alsa-utils, python3, python3-venv, python3-pip)
+- Recommend optional packages (wl-clipboard for Wayland, xclip for X11)
+- Create Python virtual environment at `/opt/speech-to-text/venv`
+- Install Python packages (faster-whisper, evdev, etc.)
+- Add you to the 'input' group automatically
+- Configure systemd service
+- Let you choose Whisper model size during installation
 
 **After installation:**
 1. **Logout and login** (required for 'input' group membership)
@@ -92,7 +92,8 @@ The package will:
 **Optional packages:**
 - For **Wayland clipboard mode**: `sudo apt install wl-clipboard`
 - For **X11 clipboard mode**: `sudo apt install xclip`
-- These are automatically installed if available, but not required for basic operation
+- These enable clipboard mode for mixed Latin/Cyrillic text support
+- Automatically installed if available during package installation
 
 **Configuration:** `~/.config/speech-to-text/config.toml`
 
@@ -205,6 +206,8 @@ stop_sound = "/usr/share/sounds/freedesktop/stereo/complete.oga"
 mode = "uinput"                    # Use "clipboard" for mixed Latin/Cyrillic text
 paste_key_combination = "shift+insert"  # For clipboard mode
 key_delay_ms = 10                  # Delay between key events (uinput mode)
+pre_paste_delay_ms = 0             # Delay before pasting (0 = no delay, 1000 = 1 second)
+                                   # Increase if text pastes to wrong window on Wayland
 ```
 
 **To avoid any network access on startup**, download a model once into a local directory and set `local_model_path` to that folder (set `download_if_missing = false` if you want to keep it strictly offline after the initial download).
@@ -221,12 +224,19 @@ key_delay_ms = 10                  # Delay between key events (uinput mode)
 - "Він сказав hello world" types correctly regardless of keyboard layout
 - Uses PRIMARY selection (Shift+Insert) - **doesn't pollute clipboard history**
 - Your regular clipboard (Ctrl+C/V) remains untouched
+- Works on both X11 (via xclip) and Wayland (via wl-clipboard)
+- Display server auto-detected during installation
 
 **To enable clipboard mode:**
 ```toml
 [text_input]
 mode = "clipboard"
 ```
+
+**Requirements:**
+- X11: `xclip` package (install: `sudo apt install xclip`)
+- Wayland: `wl-clipboard` package (install: `sudo apt install wl-clipboard`)
+- Package installer attempts to install appropriate tool automatically
 
 ### Using Mouse Buttons
 
@@ -298,10 +308,10 @@ double_tap_timeout_ms = 300     # 300ms window between taps
 4. **Release** → Transcribes and types
 
 **Benefits:**
-- ✅ Use Ctrl+Insert, Ctrl+C, Ctrl+V normally
-- ✅ No conflicts with any Ctrl shortcuts
-- ✅ Similar UX to macOS dictation (Fn double-tap)
-- ✅ Works perfectly with vim Ctrl combinations
+- Use Ctrl+Insert, Ctrl+C, Ctrl+V normally
+- No conflicts with any Ctrl shortcuts
+- Similar UX to macOS dictation (Fn double-tap)
+- Works perfectly with vim Ctrl combinations
 
 **Timing adjustment:**
 - **Faster (200ms):** Harder to trigger, fewer accidental activations
@@ -471,6 +481,88 @@ systemctl --user restart speech-to-text
 
 Now single Ctrl press works normally - only double-tap activates dictation.
 
+### Clipboard mode not pasting text
+
+**Problem:** Logs show "Text pasted successfully" but text doesn't appear in applications.
+
+**Diagnosis:**
+```bash
+# Check which clipboard tool is being used
+journalctl --user -u speech-to-text -n 50 | grep "clipboard available"
+
+# Should show "xclip available (X11)" on X11 systems
+# Should show "wl-clipboard available (Wayland)" on Wayland systems
+```
+
+**Solution 1: Wrong clipboard tool detected**
+```bash
+# Check display server type
+echo $XDG_SESSION_TYPE
+
+# If X11 but service uses wl-clipboard, reinstall package to fix auto-detection
+sudo apt install --reinstall ./speech-to-text_1.0_amd64.deb
+```
+
+**Solution 2: Missing clipboard tools**
+```bash
+# For X11
+sudo apt install xclip
+
+# For Wayland
+sudo apt install wl-clipboard
+
+# Then restart service
+systemctl --user restart speech-to-text
+```
+
+**Solution 3: Test clipboard tool manually**
+```bash
+# X11 test
+echo "test text" | xclip -selection primary -i
+xclip -selection primary -o  # Should output "test text"
+
+# Wayland test
+echo "test text" | wl-copy --primary
+wl-paste --primary  # Should output "test text"
+```
+
+If manual test works but service doesn't, check environment variables:
+```bash
+systemctl --user show-environment | grep -E 'DISPLAY|XAUTHORITY|XDG_SESSION_TYPE'
+```
+
+### Text pasting to wrong window (notifications, wrong app)
+
+**Problem:** Transcribed text appears in system notifications or wrong application instead of the focused window.
+
+**Root Cause:** On Wayland/X11, window focus can be stolen by notifications, chat messages, or system dialogs during the 1-2 second transcription period. When paste happens, the wrong window has focus.
+
+**Solution:** Add a delay before pasting to give yourself time to restore focus:
+
+```toml
+[text_input]
+mode = "clipboard"
+pre_paste_delay_ms = 1000  # Wait 1 second before pasting
+```
+
+**How it works:**
+1. You release hotkey → transcription starts (1-2 seconds)
+2. Transcription completes → "stop" sound plays
+3. **1 second delay** → you have time to click target window
+4. Text pastes to focused window
+
+**Recommended values:**
+- `0` = No delay (original behavior, may paste to wrong window)
+- `1000` = 1 second delay (recommended for Wayland users)
+- `1500-2000` = Longer delay if you need more time
+
+**Note:** Notifications can still steal focus at any time - this delay just gives you a window to manually restore it. Consider enabling Do Not Disturb mode during dictation sessions for best results.
+
+Then restart the service:
+```bash
+systemctl --user restart speech-to-text
+```
+
 ## How It Works
 
 ### Daemon Mode Workflow
@@ -550,9 +642,9 @@ Planned features and improvements:
 ```
 
 Tests verify:
-- ✓ Display server detection
-- ✓ Audio recording capability
-- ✓ Whisper model loading
-- ✓ Text tool availability
-- ✓ Keyboard device detection
+- Display server detection
+- Audio recording capability
+- Whisper model loading
+- Text tool availability
+- Keyboard device detection
 

@@ -80,7 +80,15 @@ class Transcriber:
         if not self.local_model_path:
             return self.model_name
 
+        # Check if the directory exists AND contains model files
+        model_exists = False
         if self.local_model_path.exists():
+            # Check for required model files (model.bin is the main file)
+            model_bin = self.local_model_path / "model.bin"
+            if model_bin.exists():
+                model_exists = True
+
+        if model_exists:
             logger.info(f"Using local Whisper model at {self.local_model_path}")
             return str(self.local_model_path)
 
@@ -100,6 +108,11 @@ class Transcriber:
 
         repo_id = self._repo_id_for_download()
         logger.info(f"Local model not found at {self.local_model_path}, downloading '{repo_id}'...")
+        logger.info(f"This may take a few minutes (model size varies by type)...")
+
+        # Create directory if it doesn't exist
+        self.local_model_path.mkdir(parents=True, exist_ok=True)
+
         try:
             snapshot_download(
                 repo_id=repo_id,
@@ -107,10 +120,11 @@ class Transcriber:
                 local_dir_use_symlinks=False,
                 revision="main",
             )
-            logger.info(f"Model downloaded to {self.local_model_path}")
+            logger.info(f"Model downloaded successfully to {self.local_model_path}")
             return str(self.local_model_path)
         except Exception as e:
-            raise RuntimeError(f"Failed to download model '{self.model_name}': {e}") from e
+            logger.error(f"Download failed: {e}")
+            raise RuntimeError(f"Failed to download model '{self.model_name}' from '{repo_id}': {e}") from e
 
     def load_model(self):
         """

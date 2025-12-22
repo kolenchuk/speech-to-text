@@ -14,10 +14,12 @@ WorkingDirectory=/home/dev/speech-to-text
 
 # Environment variables
 Environment="PATH=/home/dev/speech-env/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/home/dev/speech-to-text"
 Environment="XDG_SESSION_TYPE=wayland"
 Environment="XDG_RUNTIME_DIR=/run/user/%U"
 Environment="WAYLAND_DISPLAY=wayland-0"
 Environment="DISPLAY=:0"
+Environment="XAUTHORITY=%h/.Xauthority"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
 
 # Logging (captured by journalctl --user)

@@ -3,12 +3,23 @@
 # Activates virtual environment and runs the speech-to-text application
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_PATH="$HOME/speech-env"
 
-# Check if virtual environment exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    echo "Create it with: python3 -m venv $VENV_PATH"
+# Determine venv path based on installation method
+if [ -d "$SCRIPT_DIR/venv" ]; then
+    # Package installation: venv in same directory as script
+    VENV_PATH="$SCRIPT_DIR/venv"
+elif [ -d "$HOME/speech-env" ]; then
+    # Manual installation: user's home directory
+    VENV_PATH="$HOME/speech-env"
+else
+    echo "Error: Virtual environment not found!"
+    echo ""
+    echo "Searched locations:"
+    echo "  - $SCRIPT_DIR/venv (package installation)"
+    echo "  - $HOME/speech-env (manual installation)"
+    echo ""
+    echo "If installed via .deb package, the venv should have been created automatically."
+    echo "If manual install, create it with: python3 -m venv ~/speech-env"
     exit 1
 fi
 

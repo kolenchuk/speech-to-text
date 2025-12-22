@@ -26,13 +26,25 @@ import tempfile
 import time
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# This ensures we can import src.* modules regardless of how the script is run
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from src.config import Config
-from src.utils.logging import setup_logging
-from src.core.transcriber import Transcriber
-from src.core.recorder import AudioRecorder
-from src.core.text_input import TextInput
+# Import with error handling
+try:
+    from src.config import Config
+    from src.utils.logging import setup_logging
+    from src.core.transcriber import Transcriber
+    from src.core.recorder import AudioRecorder
+    from src.core.text_input import TextInput
+except ImportError as e:
+    print(f"Error importing modules: {e}", file=sys.stderr)
+    print(f"Python path: {sys.path}", file=sys.stderr)
+    print(f"Working directory: {os.getcwd()}", file=sys.stderr)
+    print(f"Project root: {project_root}", file=sys.stderr)
+    print(f"__file__: {__file__}", file=sys.stderr)
+    raise
 
 
 def run_tests(config: Config) -> bool:
@@ -55,6 +67,7 @@ def run_tests(config: Config) -> bool:
         key_delay_ms=config.text_input.key_delay_ms,
         mode=config.text_input.mode,
         paste_key_combination=config.text_input.paste_key_combination,
+        pre_paste_delay_ms=config.text_input.pre_paste_delay_ms,
     )
     print(f"  Display server: {display}")
     print(f"  Text tool: {text_input.tool}")
@@ -227,6 +240,7 @@ def record_and_transcribe(
             key_delay_ms=config.text_input.key_delay_ms,
             mode=config.text_input.mode,
             paste_key_combination=config.text_input.paste_key_combination,
+            pre_paste_delay_ms=config.text_input.pre_paste_delay_ms,
         )
         text_input.type_text_sync(text)
 

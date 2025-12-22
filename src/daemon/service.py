@@ -91,6 +91,7 @@ class SpeechToTextService:
             key_delay_ms=config.text_input.key_delay_ms,
             mode=config.text_input.mode,
             paste_key_combination=config.text_input.paste_key_combination,
+            pre_paste_delay_ms=config.text_input.pre_paste_delay_ms,
         )
 
         self.feedback = AudioFeedback(
