@@ -161,7 +161,6 @@ class LoggingConfig:
 class DisplayConfig:
     """Display server configuration."""
     server: str = ""  # Empty for auto-detect
-    tool: str = ""  # Force specific tool: "ydotool", "wtype", "xdotool"
 
     @property
     def actual_server(self) -> str:
@@ -280,7 +279,6 @@ class Config:
             d = data["display"]
             config.display = DisplayConfig(
                 server=d.get("server", config.display.server),
-                tool=d.get("tool", config.display.tool),
             )
 
         if "text_input" in data:
@@ -331,30 +329,6 @@ def ensure_config_dir():
     config_dir = Path.home() / ".config" / "speech-to-text"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
-
-
-# For backward compatibility with the old Config class
-class LegacyConfig:
-    """Legacy configuration for backward compatibility."""
-
-    WHISPER_MODEL = "base"
-    WHISPER_DEVICE = "cpu"
-    WHISPER_COMPUTE_TYPE = "int8"
-    WHISPER_LANGUAGE = None
-
-    AUDIO_RATE = 16000
-    AUDIO_CHANNELS = 1
-    AUDIO_FORMAT = "S16_LE"
-    DEFAULT_DURATION = 5
-
-    DISPLAY_SERVER = os.environ.get("XDG_SESSION_TYPE", "x11")
-    TEXT_TOOL = "ydotool" if DISPLAY_SERVER == "wayland" else "xdotool"
-
-    HOTKEY = "KEY_RIGHTCTRL"
-    INPUT_DEVICE = None
-
-    VAD_FILTER = True
-    BEAM_SIZE = 5
 
 
 if __name__ == "__main__":

@@ -26,14 +26,8 @@ fi
 # Activate virtual environment
 source "$VENV_PATH/bin/activate"
 
-# Check for legacy mode (direct speech_to_text.py call)
-if [[ "$1" == "--legacy" ]]; then
-    shift
-    python3 "$SCRIPT_DIR/src/speech_to_text.py" "$@"
-else
-    # Run the new main module
-    python3 -m src.main "$@"
-fi
+# Run the main module
+python3 -m src.main "$@"
 
 # Deactivate when done (only for non-daemon mode)
 if [[ "$1" != "--daemon" && "$1" != "-d" ]]; then

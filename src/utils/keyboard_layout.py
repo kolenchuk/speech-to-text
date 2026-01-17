@@ -334,7 +334,7 @@ class KeyboardLayoutMapper:
         }
 
         # Ukrainian layout mapping
-        # Based on standard Ukrainian (legacy) keyboard layout from XKB
+        # Based on standard Ukrainian keyboard layout from XKB
         # This is the default Ukrainian typewriter layout, NOT phonetic
         self._uk_layout: Dict[str, Tuple[int, List[int]]] = {
             # Ukrainian Cyrillic lowercase - QWERTY row

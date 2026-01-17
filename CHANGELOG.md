@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hold-to-talk recording**: Hold Right Ctrl (configurable via evdev) to record audio
 - **Local offline transcription**: Uses Faster Whisper models running on CPU with int8 optimization
 - **Auto-typing**: Automatically types transcribed text into active application
-- **Cross-display server support**: Works on both X11 (xdotool) and Wayland (wtype preferred, ydotool fallback)
+- **Cross-display server support**: Works on both X11 and Wayland
 - **Smart language detection**: Auto-detects keyboard layout (Ukrainian/English/etc.) at recording time
 - **Systemd integration**: Runs as user service on login with proper environment variables
 - **Audio feedback**: Configurable start/stop sounds via PulseAudio
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Faster Whisper** for speech recognition with configurable models (tiny, base, small, medium, large)
 - **ALSA** (arecord) for audio recording
 - **python3-evdev** for keyboard monitoring
-- **Text automation tools**: xdotool (X11), wtype (Wayland), ydotool (fallback)
+- **Text automation tools**: python-uinput (no external dependency)
 - **GNOME integration**: Keyboard layout detection via gsettings
 
 ### Documentation
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration template with inline documentation
 
 ### Known Limitations
-- ydotool has poor Unicode/Cyrillic support on Wayland - wtype preferred
+- Clipboard mode is recommended for mixed Unicode/Cyrillic text
 - Multiline text detection not yet implemented
 - Special character recognition requires post-processing
 - Single Whisper model backend (alternative models planned for future release)

@@ -219,6 +219,13 @@ pre_paste_delay_ms = 0             # Delay before pasting (0 = no delay, 1000 = 
 - Works great for single-language dictation
 - **Limitation:** Mixed Latin/Cyrillic text may be garbled (e.g., "hello" with Ukrainian layout → "ру|ддщ")
 
+**When to use which mode:**
+
+| Mode | Use it when | Trade-offs |
+|------|-------------|------------|
+| `uinput` | You dictate mostly in one layout/language | Fast and no clipboard use, but mixed scripts can be garbled |
+| `clipboard` | You mix Latin/Cyrillic or need exact Unicode output | Requires `xclip`/`wl-clipboard` and uses paste shortcut |
+
 **clipboard mode (recommended for mixed languages):**
 - Solves mixed-script problem completely
 - "Він сказав hello world" types correctly regardless of keyboard layout
@@ -341,13 +348,13 @@ Say special words to trigger keyboard actions instead of typing the words:
 
 ```
 speech-to-text/
-├── run.sh                      # Runner script
+├── run.sh                      # Single entrypoint script
 ├── README.md                   # This file
 ├── config.example.toml         # Example configuration
 │
 ├── src/
 │   ├── __init__.py
-│   ├── main.py                 # Main entry point
+│   ├── main.py                 # Main module entrypoint
 │   ├── config.py               # Configuration management
 │   │
 │   ├── core/
@@ -565,6 +572,8 @@ systemctl --user restart speech-to-text
 
 ## How It Works
 
+See `ARCHITECTURE.md` for the daemon entrypoint flow and module chain.
+
 ### Daemon Mode Workflow
 
 1. **Initialization**
@@ -647,4 +656,3 @@ Tests verify:
 - Whisper model loading
 - Text tool availability
 - Keyboard device detection
-

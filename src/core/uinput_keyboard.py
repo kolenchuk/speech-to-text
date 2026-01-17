@@ -6,7 +6,7 @@ device using the evdev.UInput API. It translates text strings to keyboard
 events with full Unicode/Cyrillic support.
 
 Key Features:
-- No external tools required (xdotool/ydotool/wtype)
+- No external text automation tools required
 - Full Unicode support (Ukrainian Cyrillic, English, etc.)
 - Layout-aware character mapping
 - Async and sync typing interfaces

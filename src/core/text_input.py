@@ -156,6 +156,19 @@ class TextInput:
                 )
             logger.info("Clipboard mode validated: xclip available (X11)")
 
+    def _check_tool_available(self) -> bool:
+        """Return True if required input/clipboard tools are available."""
+        if not self._is_uinput_available():
+            return False
+
+        if self.mode != "clipboard":
+            return True
+
+        if self.display_server == "wayland":
+            return bool(shutil.which("wl-copy") and shutil.which("wl-paste"))
+
+        return bool(shutil.which("xclip"))
+
     def _parse_paste_key_combination(self) -> list:
         """Parse paste key combination string into evdev key codes.
 

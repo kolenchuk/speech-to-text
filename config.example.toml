@@ -109,10 +109,6 @@ file = ""
 # Auto-detection uses $XDG_SESSION_TYPE environment variable
 server = ""
 
-# Text input tool: "ydotool", "wtype", or "xdotool"
-# Leave empty for auto-detection (Wayland defaults to wtype for Unicode text)
-tool = ""
-
 [text_input]
 # Text input mode: "uinput" or "clipboard"
 # - "uinput": Direct keycode injection (works on X11 and Wayland)
@@ -125,6 +121,9 @@ tool = ""
 #   * Uses PRIMARY selection to avoid polluting clipboard history
 #   * Your regular clipboard (Ctrl+C/V) remains untouched
 #   * Requires wl-clipboard package on Wayland
+# When to choose:
+# - Use "uinput" if you диктуєш однією мовою/розкладкою.
+# - Use "clipboard" if you mix Latin/Cyrillic or need exact Unicode output.
 mode = "uinput"
 
 # Paste key combination for clipboard mode (not used in uinput mode)
