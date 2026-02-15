@@ -243,6 +243,11 @@ class UInputKeyboard:
 
         logger.debug(f"Typing text (sync): {repr(text[:50])}...")
 
+        # Layout can change while daemon is running; force fresh detection
+        # for each transcription when no explicit layout override is provided.
+        if layout is None:
+            self._mapper.invalidate_layout_cache()
+
         for char in text:
             self._type_char_sync(char, layout)
 
@@ -264,6 +269,11 @@ class UInputKeyboard:
             return
 
         logger.debug(f"Typing text (async): {repr(text[:50])}...")
+
+        # Layout can change while daemon is running; force fresh detection
+        # for each transcription when no explicit layout override is provided.
+        if layout is None:
+            self._mapper.invalidate_layout_cache()
 
         for char in text:
             await self._type_char_async(char, layout)
